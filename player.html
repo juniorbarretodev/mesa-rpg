@@ -547,6 +547,12 @@
       document.getElementById('roomCode').textContent = roomCode;
 
       await RoomSystem.joinRoom(roomCode);
+      
+      console.group(`[Player Page] Inicializando Mesa: ${roomCode}`);
+      console.log('User UID:', AuthSystem.currentUser?.uid);
+      console.log('Is Master?', RoomSystem.isMaster);
+      console.groupEnd();
+
       await SheetSystem.loadOrCreateSheet(roomCode);
       await BattleSystem.initialize();
 

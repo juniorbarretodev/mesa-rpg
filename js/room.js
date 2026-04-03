@@ -91,24 +91,41 @@ export const RoomSystem = {
       throw new Error('Esta sala foi encerrada');
     }
 
-    await setDoc(doc(db, 'rooms', upperCode, 'players', user.uid), {
-      nick: AuthSystem.currentNick || user.displayName || 'Jogador',
-      role: 'player',
-      online: true,
-      joinedAt: serverTimestamp()
-    }, { merge: true });
+    // Busca o perfil global para pegar o avatar
+    const globalProfile = await AuthSystem.getUserProfile();
+    const avatarUrl = globalProfile?.avatarUrl || '';
+    const nick = globalProfile?.nick || AuthSystem.currentNick || user.displayName || 'Jogador';
 
-    await set(ref(rtdb, `rooms/${upperCode}/presence/${user.uid}`), {
-      online: true,
-      lastSeen: Date.now(),
-      nick: AuthSystem.currentNick || user.displayName || 'Jogador',
-      role: roomData.masterId === user.uid ? 'master' : 'player'
-    });
+    console.group(`[RoomSystem] Entrando na sala: ${upperCode}`);
+    console.log('User UID:', user.uid);
+    console.log('Room Master ID:', roomData.masterId);
+    console.log('Coincidem?', roomData.masterId === user.uid);
+    console.groupEnd();
 
     this.currentRoom = roomData;
     this.currentRoomCode = upperCode;
     this.isMaster = roomData.masterId === user.uid;
     AuthSystem.currentRoomCode = upperCode;
+
+    await setDoc(doc(db, 'rooms', upperCode, 'players', user.uid), {
+      nick: nick,
+      role: 'player',
+      online: true,
+      joinedAt: serverTimestamp()
+    }, { merge: true });
+
+    // Registrar presença no RTDB com AVATAR
+    await set(ref(rtdb, `rooms/${upperCode}/presence/${user.uid}`), {
+      online: true,
+      lastSeen: Date.now(),
+      nick: nick,
+      avatarUrl: avatarUrl,
+      role: this.isMaster ? 'master' : 'player'
+    });
+
+    this.currentRoom = roomData;
+    this.currentRoomCode = upperCode;
+    this.isMaster = roomData.masterId === user.uid;
 
     return roomData;
   },

@@ -545,7 +545,15 @@
 
       await RoomSystem.joinRoom(roomCode);
       
+      console.group(`[Master Page] Verificando Acesso: ${roomCode}`);
+      console.log('User UID:', AuthSystem.currentUser?.uid);
+      console.log('Room Master ID:', RoomSystem.currentRoom?.masterId);
+      console.log('Is Master?', RoomSystem.isMaster);
+      console.log('Room Data:', RoomSystem.currentRoom);
+      console.groupEnd();
+
       if (!RoomSystem.isMaster) {
+        console.warn("[Master Page] Acesso negado. Redirecionando para Lobby.");
         window.location.href = 'lobby.html?code=' + roomCode;
         return;
       }

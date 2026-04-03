@@ -54,6 +54,17 @@
         </div>
 
         <div class="lobby-sidebar">
+          <div class="panel" id="userProfileShort" style="margin-bottom: 20px;">
+            <h3 class="panel-title mb-md">👤 Seu Perfil</h3>
+            <div class="flex items-center gap-md">
+              <div class="player-avatar" id="yourAvatar" style="width: 50px; height: 50px;">?</div>
+              <div class="flex flex-col">
+                <strong id="yourNick" style="display: block;">Carregando...</strong>
+                <a href="profile.html" class="text-muted" style="font-size: 0.75rem;">Editar Perfil</a>
+              </div>
+            </div>
+          </div>
+
           <div id="masterActions" class="panel hidden">
             <h3 class="panel-title mb-md">🎭 Ações do Mestre</h3>
             <button class="btn btn-success btn-block mb-sm" id="startSessionBtn">
@@ -142,6 +153,18 @@
         chatInput.placeholder = "Digite sua mensagem...";
         document.getElementById('chatSendBtn').disabled = false;
 
+        // Atualiza UI de Perfil no Lobby
+        const profile = await AuthSystem.getUserProfile();
+        console.log("[Lobby] Perfil carregado:", profile);
+        if (profile) {
+          document.getElementById('yourNick').textContent = profile.nick || AuthSystem.currentNick;
+          if (profile.avatarUrl) {
+            document.getElementById('yourAvatar').innerHTML = `<img src="${profile.avatarUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+          } else {
+            document.getElementById('yourAvatar').textContent = (profile.nick || AuthSystem.currentNick)?.[0].toUpperCase();
+          }
+        }
+
         // Inicia inscrições do Firebase APENAS uma vez
         RoomSystem.subscribeToRoom(roomCode, {
           onRoomUpdate: (room) => {
@@ -149,8 +172,15 @@
             document.getElementById('roomStatus').textContent = room.status === 'waiting' ? 'Aguardando' : room.status;
             
             if (room.status === 'playing') {
-              console.log("Sessão iniciada! Redirecionando...");
-              window.location.href = RoomSystem.isMaster ? `master.html?code=${roomCode}` : `player.html?code=${roomCode}`;
+              console.log("[Lobby] Sessão iniciada! Verificando isMaster:", RoomSystem.isMaster);
+              
+              const target = RoomSystem.isMaster ? `master.html?code=${roomCode}` : `player.html?code=${roomCode}`;
+              console.log("[Lobby] Redirecionando para:", target);
+              
+              // Pequeno delay para garantir que o estado local do RoomSystem esteja sincronizado
+              setTimeout(() => {
+                window.location.href = target;
+              }, 500);
             }
           },
           onPlayersUpdate: renderPlayers
@@ -177,13 +207,19 @@
         return;
       }
 
-      container.innerHTML = players.map(p => `
-        <div class="player-item">
-          <div class="player-avatar">${p.nick?.[0]?.toUpperCase() || '?'}</div>
-          <span class="player-name">${p.nick}</span>
-          <span class="player-status ${p.role === 'master' ? 'master' : ''} ${!p.online ? 'offline' : ''}">${p.role === 'master' ? 'Mestre' : p.online ? 'Online' : 'Offline'}</span>
-        </div>
-      `).join('');
+      container.innerHTML = players.map(p => {
+        const avatarContent = p.avatarUrl 
+          ? `<img src="${p.avatarUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`
+          : p.nick?.[0]?.toUpperCase() || '?';
+          
+        return `
+          <div class="player-item">
+            <div class="player-avatar">${avatarContent}</div>
+            <span class="player-name">${p.nick}</span>
+            <span class="player-status ${p.role === 'master' ? 'master' : ''} ${!p.online ? 'offline' : ''}">${p.role === 'master' ? 'Mestre' : p.online ? 'Online' : 'Offline'}</span>
+          </div>
+        `;
+      }).join('');
     }
 
     function renderChat(messages) {
