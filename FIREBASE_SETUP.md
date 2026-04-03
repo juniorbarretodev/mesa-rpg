@@ -80,7 +80,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Permite ler/escrever perfis de usuário se estiver logado
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+    
+    // Regras para Fichas de Personagem
+    match /sheets/{roomId}/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data));
+      allow write: if isAuthenticated() && isOwner(userId);
     }
     
     // Regras para as salas

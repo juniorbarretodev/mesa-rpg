@@ -536,36 +536,48 @@
     import { BattleSystem } from './js/battle.js';
 
     async function init() {
-      // Aguarda a inicialização do Firebase antes de verificar o login
-      await AuthSystem.waitForInitialization();
+      try {
+        console.log("[Player] Iniciando sistemas...");
+        // Aguarda a inicialização do Firebase antes de verificar o login
+        await AuthSystem.waitForInitialization();
 
-      if (!roomCode || !AuthSystem.isAuthenticated()) {
-        window.location.href = 'index.html';
-        return;
+        if (!roomCode || !AuthSystem.isAuthenticated()) {
+          window.location.href = 'index.html';
+          return;
+        }
+
+        document.getElementById('roomCode').textContent = roomCode;
+
+        await RoomSystem.joinRoom(roomCode);
+        
+        console.group(`[Player Page] Inicializando Mesa: ${roomCode}`);
+        console.log('User UID:', AuthSystem.currentUser?.uid);
+        console.log('Is Master?', RoomSystem.isMaster);
+        console.groupEnd();
+
+        // Inicializa o Mapa primeiro
+        console.log("[Player] Inicializando Mapa...");
+        await MapSystem.initialize('mapViewer');
+        MapSystem.subscribeToMap();
+
+        console.log("[Player] Carregando Ficha e Batalha...");
+        await SheetSystem.loadOrCreateSheet(roomCode);
+        await BattleSystem.initialize();
+
+        SheetSystem.subscribeToSheet(roomCode, renderSheet);
+        ChatSystem.subscribeToChat(roomCode, renderChat);
+        
+        // Habilita o chat após entrar na sala
+        const chatInput = document.getElementById('chatInput');
+        chatInput.disabled = false;
+        chatInput.placeholder = "Digite sua mensagem ou use uma habilidade...";
+        document.getElementById('chatSendBtn').disabled = false;
+        console.log("[Player] Sistemas prontos!");
+
+      } catch (error) {
+        console.error("[Player] Erro crítico na inicialização:", error);
+        alert("Erro ao carregar partida. Verifique o console.");
       }
-
-      document.getElementById('roomCode').textContent = roomCode;
-
-      await RoomSystem.joinRoom(roomCode);
-      
-      console.group(`[Player Page] Inicializando Mesa: ${roomCode}`);
-      console.log('User UID:', AuthSystem.currentUser?.uid);
-      console.log('Is Master?', RoomSystem.isMaster);
-      console.groupEnd();
-
-      await SheetSystem.loadOrCreateSheet(roomCode);
-      await BattleSystem.initialize();
-
-      SheetSystem.subscribeToSheet(roomCode, renderSheet);
-      ChatSystem.subscribeToChat(roomCode, renderChat);
-
-      MapSystem.subscribeToMap();
-      
-      // Habilita o chat após entrar na sala
-      const chatInput = document.getElementById('chatInput');
-      chatInput.disabled = false;
-      chatInput.placeholder = "Digite sua mensagem ou use uma habilidade...";
-      document.getElementById('chatSendBtn').disabled = false;
     }
 
     init();

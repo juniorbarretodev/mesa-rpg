@@ -9,43 +9,59 @@ export const SheetSystem = {
   unsubscriber: null,
 
   async loadOrCreateSheet(roomCode) {
-    const user = AuthSystem.currentUser;
-    if (!user || !roomCode) return null;
+    try {
+      const user = AuthSystem.currentUser;
+      if (!user || !roomCode) {
+        console.warn("[SheetSystem] Usuário ou código da sala ausente.");
+        return null;
+      }
 
-    const sheetRef = doc(db, 'sheets', roomCode, user.uid);
-    const sheetSnap = await getDoc(sheetRef);
+      console.log(`[SheetSystem] Carregando ficha para sala ${roomCode}, usuário ${user.uid}...`);
+      const sheetRef = doc(db, 'sheets', roomCode, user.uid);
+      
+      console.log("[SheetSystem] Buscando documento no Firestore...");
+      const sheetSnap = await getDoc(sheetRef);
 
-    if (sheetSnap.exists()) {
-      this.currentSheet = { id: sheetSnap.id, ...sheetSnap.data() };
+      if (sheetSnap.exists()) {
+        console.log("[SheetSystem] Ficha encontrada!");
+        this.currentSheet = { id: sheetSnap.id, ...sheetSnap.data() };
+        return this.currentSheet;
+      }
+
+      console.log("[SheetSystem] Ficha não existe. Buscando Perfil Global...");
+      // Se não existir ficha na sala, busca os dados Globais do Perfil
+      const globalProfile = await AuthSystem.getUserProfile();
+      console.log("[SheetSystem] Perfil global carregado:", globalProfile);
+
+      const defaultSheet = {
+        name: globalProfile?.nick || AuthSystem.currentNick || 'Novo Aventureiro',
+        class: globalProfile?.favoriteClass || 'Aventureiro',
+        level: 1,
+        avatarUrl: globalProfile?.avatarUrl || '',
+        hp: 20,
+        hpMax: 20,
+        resources: { mana: 10, stamina: 10 },
+        status: [],
+        attacks: [
+          { id: 'atk_1', name: 'Ataque Básico', dice: '1d6', bonus: 0, description: 'Um ataque simples.', keyWords: ['ataque', 'atacar', 'batida'] }
+        ],
+        spells: [],
+        items: [
+          { id: 'item_1', name: 'Poção de Cura', effect: '+1d4 HP', quantity: 2 }
+        ],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      console.log("[SheetSystem] Criando nova ficha na sala...");
+      await setDoc(sheetRef, defaultSheet);
+      this.currentSheet = { id: user.uid, ...defaultSheet };
+      console.log("[SheetSystem] Ficha inicializada com sucesso!");
       return this.currentSheet;
+    } catch (error) {
+      console.error("[SheetSystem] Erro ao carregar/criar ficha:", error);
+      throw error;
     }
-
-    // Se não existir ficha na sala, busca os dados Globais do Perfil
-    const globalProfile = await AuthSystem.getUserProfile();
-
-    const defaultSheet = {
-      name: globalProfile?.nick || AuthSystem.currentNick || 'Novo Aventureiro',
-      class: globalProfile?.favoriteClass || 'Aventureiro',
-      level: 1,
-      avatarUrl: globalProfile?.avatarUrl || '',
-      hp: 20,
-      hpMax: 20,
-      resources: { mana: 10, stamina: 10 },
-      status: [],
-      attacks: [
-        { id: 'atk_1', name: 'Ataque Básico', dice: '1d6', bonus: 0, description: 'Um ataque simples.', keyWords: ['ataque', 'atacar', 'batida'] }
-      ],
-      spells: [],
-      items: [
-        { id: 'item_1', name: 'Poção de Cura', effect: '+1d4 HP', quantity: 2 }
-      ],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-
-    await setDoc(sheetRef, defaultSheet);
-    this.currentSheet = { id: user.uid, ...defaultSheet };
-    return this.currentSheet;
   },
 
   subscribeToSheet(roomCode, callback) {

@@ -469,18 +469,8 @@
         </aside>
 
         <section class="main-area">
-          <div class="map-container" id="mapContainer">
-            <div id="mapWrapper" class="map-wrapper">
-              <img id="mapImage" class="map-image" style="display: none;">
-              <canvas id="mapDrawingCanvas" class="map-drawing-canvas"></canvas>
-              <div id="tokensLayer" class="tokens-layer"></div>
-              <div class="map-drop-zone" id="mapDropZone">
-                <p style="font-size: 3rem; margin: 0;">🗺️</p>
-                <p>Arraste uma imagem de mapa aqui</p>
-                <p class="text-muted" style="font-size: 0.85rem;">ou clique para selecionar</p>
-              </div>
-              <input type="file" id="mapFileInput" accept="image/*" style="display: none;">
-            </div>
+          <div id="mapContainer" style="height: 100%; border-radius: var(--radius-lg); overflow: hidden;">
+            <!-- O MapSystem irá preencher o HTML aqui automaticamente -->
           </div>
 
           <div class="panel mt-md chat-container">
@@ -535,56 +525,64 @@
     const roomCode = urlParams.get('code');
 
     async function init() {
-      // Aguarda a inicialização do Firebase antes de verificar o login
-      await AuthSystem.waitForInitialization();
+      try {
+        console.log("[Master] Iniciando sistemas...");
+        // Aguarda a inicialização do Firebase antes de verificar o login
+        await AuthSystem.waitForInitialization();
 
-      if (!roomCode || !AuthSystem.isAuthenticated()) {
-        window.location.href = 'index.html';
-        return;
+        if (!roomCode || !AuthSystem.isAuthenticated()) {
+          window.location.href = 'index.html';
+          return;
+        }
+
+        await RoomSystem.joinRoom(roomCode);
+        
+        if (!RoomSystem.isMaster) {
+          console.warn("[Master] Acesso negado. Redirecionando para Lobby.");
+          window.location.href = 'lobby.html?code=' + roomCode;
+          return;
+        }
+
+        document.getElementById('masterNick').textContent = AuthSystem.currentNick;
+        document.getElementById('roomName').textContent = RoomSystem.currentRoom?.name || 'Mesa';
+
+        // Inicializa o Mapa primeiro para garantir o container pronto
+        console.log("[Master] Inicializando Mapa...");
+        await MapSystem.initialize('mapContainer');
+        MapSystem.subscribeToMap();
+
+        // Inscreve nos ouvintes da sala
+        RoomSystem.subscribeToRoom(roomCode, {
+          onRoomUpdate: (room) => {
+            document.getElementById('battleIndicator').classList.toggle('active', room.battleMode);
+            if (room.battleMode) {
+              document.getElementById('toggleBattleBtn').textContent = '⚔️ Desativar Batalha';
+              document.getElementById('toggleBattleBtn').classList.remove('btn-success');
+              document.getElementById('toggleBattleBtn').classList.add('btn-danger');
+            }
+          },
+          onPlayersUpdate: renderPlayers
+        });
+
+        console.log("[Master] Inicializando Chat e Batalha...");
+        ChatSystem.subscribeToChat(roomCode, renderChat);
+        ChatSystem.subscribeToDice(roomCode, renderRollHistory);
+
+        MasterSystem.setupNPCPanel();
+        await MasterSystem.initialize();
+        await BattleSystem.initialize();
+
+        // Habilita o chat após entrar na sala
+        const chatInput = document.getElementById('chatInput');
+        chatInput.disabled = false;
+        chatInput.placeholder = "Digite sua mensagem...";
+        document.getElementById('chatSendBtn').disabled = false;
+        console.log("[Master] Sistemas prontos!");
+
+      } catch (error) {
+        console.error("[Master] Erro crítico na inicialização:", error);
+        alert("Erro ao carregar mesa. Verifique o console.");
       }
-
-      await RoomSystem.joinRoom(roomCode);
-      
-      console.group(`[Master Page] Verificando Acesso: ${roomCode}`);
-      console.log('User UID:', AuthSystem.currentUser?.uid);
-      console.log('Room Master ID:', RoomSystem.currentRoom?.masterId);
-      console.log('Is Master?', RoomSystem.isMaster);
-      console.log('Room Data:', RoomSystem.currentRoom);
-      console.groupEnd();
-
-      if (!RoomSystem.isMaster) {
-        console.warn("[Master Page] Acesso negado. Redirecionando para Lobby.");
-        window.location.href = 'lobby.html?code=' + roomCode;
-        return;
-      }
-
-      document.getElementById('masterNick').textContent = AuthSystem.currentNick;
-      document.getElementById('roomName').textContent = RoomSystem.currentRoom?.name || 'Mesa';
-
-      RoomSystem.subscribeToRoom(roomCode, {
-        onRoomUpdate: (room) => {
-          document.getElementById('battleIndicator').classList.toggle('active', room.battleMode);
-          if (room.battleMode) {
-            document.getElementById('toggleBattleBtn').textContent = '⚔️ Desativar Batalha';
-            document.getElementById('toggleBattleBtn').classList.remove('btn-success');
-            document.getElementById('toggleBattleBtn').classList.add('btn-danger');
-          }
-        },
-        onPlayersUpdate: renderPlayers
-      });
-
-      ChatSystem.subscribeToChat(roomCode, renderChat);
-      ChatSystem.subscribeToDice(roomCode, renderRollHistory);
-
-      MasterSystem.setupNPCPanel();
-      await MasterSystem.initialize();
-      await BattleSystem.initialize();
-
-      // Habilita o chat após entrar na sala
-      const chatInput = document.getElementById('chatInput');
-      chatInput.disabled = false;
-      chatInput.placeholder = "Digite sua mensagem...";
-      document.getElementById('chatSendBtn').disabled = false;
     }
 
     function renderPlayers(players) {
