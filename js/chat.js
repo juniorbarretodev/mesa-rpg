@@ -21,19 +21,33 @@ export const ChatSystem = {
 
   async sendMessage(text, type = 'normal') {
     const code = RoomSystem.currentRoomCode;
-    if (!code) return;
-
     const user = AuthSystem.currentUser;
+
+    if (!code) {
+      console.error("Erro no Chat: Código da sala não definido.");
+      return;
+    }
+
+    if (!user) {
+      console.error("Erro no Chat: Usuário não autenticado.");
+      return;
+    }
     
     const message = {
       senderId: user.uid,
-      senderNick: AuthSystem.currentNick,
+      senderNick: AuthSystem.currentNick || user.displayName || "Jogador",
       text: text,
       type: type,
       timestamp: Date.now()
     };
 
-    await push(ref(rtdb, `rooms/${code}/chat`), message);
+    try {
+      await push(ref(rtdb, `rooms/${code}/chat`), message);
+      console.log("Mensagem enviada com sucesso para a sala", code);
+    } catch (dbError) {
+      console.error("Erro de conexão ao banco de dados (Chat):", dbError.message);
+      alert("Erro ao enviar mensagem. Verifique sua conexão.");
+    }
   },
 
   async sendAction(text) {

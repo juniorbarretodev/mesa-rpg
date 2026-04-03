@@ -10,7 +10,8 @@ import { ChatSystem, BATTLE_PHASES } from './chat.js';
 export const BattleSystem = {
   battleState: null,
   listeners: [],
-  playerAbilities: {},
+  playerAbilities: {}, // Mantido por compatibilidade
+  participantsData: {}, // Cache completo das fichas (HP, recursos, etc)
   currentTurn: null,
   turnIndex: 0,
   initiative: [],
@@ -18,10 +19,10 @@ export const BattleSystem = {
 
   async initialize() {
     await this.subscribeToBattleState();
-    await this.loadPlayerAbilities();
+    await this.loadParticipantsData();
   },
 
-  async loadPlayerAbilities() {
+  async loadParticipantsData() {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
 
@@ -29,7 +30,9 @@ export const BattleSystem = {
     const snap = await getDocs(sheetsRef);
     
     snap.forEach(doc => {
-      const sheet = doc.data();
+      const sheet = { id: doc.id, ...doc.data() };
+      this.participantsData[doc.id] = sheet;
+      
       const abilities = [
         ...(sheet.attacks || []),
         ...(sheet.spells || [])
@@ -259,11 +262,16 @@ export const BattleSystem = {
       }
     } else {
       const sheetRef = doc(db, 'sheets', code, targetId);
-      const sheet = await import('./sheet.js').then(m => m.SheetSystem.playerSheets?.[targetId]);
+      const sheet = this.participantsData[targetId];
       
       if (sheet) {
-        const newHP = Math.max(0, (sheet.hp || 0) - damage);
+        const newHP = Math.max(0, Math.min(sheet.hpMax || 20, (sheet.hp || 0) - damage));
         await updateDoc(sheetRef, { hp: newHP });
+        
+        // Atualiza cache local
+        this.participantsData[targetId].hp = newHP;
+      } else {
+        console.warn("BattleSystem: Ficha não encontrada para aplicação de dano:", targetId);
       }
     }
   },

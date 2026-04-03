@@ -47,9 +47,9 @@
               <p class="text-center text-muted">Aguardando mensagens...</p>
             </div>
             <form id="chatForm" class="flex gap-sm">
-              <input type="text" id="chatInput" class="input" placeholder="Digite sua mensagem..." autocomplete="off">
-              <button type="submit" class="btn btn-primary">Enviar</button>
-            </form>
+               <input type="text" id="chatInput" class="input" placeholder="Conectando..." autocomplete="off" disabled>
+               <button type="submit" class="btn btn-primary" id="chatSendBtn" disabled>Enviar</button>
+             </form>
           </div>
         </div>
 
@@ -69,7 +69,8 @@
             <div class="flex flex-col gap-sm">
               <div class="flex flex-between">
                 <span class="text-muted">Sua função:</span>
-                <span id="yourRole" class="badge badge-purple">---</span>
+                <span id="userRoleBadge" class="badge">---</span>
+                <span id="yourRole" class="hidden">Jogador</span>
               </div>
               <div class="flex flex-between">
                 <span class="text-muted">Status:</span>
@@ -120,6 +121,17 @@
 
       document.getElementById('roomCode').textContent = roomCode;
 
+      try {
+        // ESSENCIAL: Participar da sala para popular o RoomSystem.currentRoomCode e RoomSystem.isMaster
+        await RoomSystem.joinRoom(roomCode);
+        console.log("Entrou na sala com sucesso:", roomCode);
+      } catch (e) {
+        console.error("Erro ao entrar na sala:", e);
+        alert("Ocorreu um erro ao entrar na sala. Verifique o código.");
+        window.location.href = 'index.html';
+        return;
+      }
+
       RoomSystem.subscribeToRoom(roomCode, {
         onRoomUpdate: (room) => {
           document.getElementById('roomName').textContent = room.name;
@@ -134,10 +146,20 @@
 
       ChatSystem.subscribeToChat(roomCode, renderChat);
 
-      document.getElementById('yourRole').textContent = RoomSystem.isMaster ? 'Mestre' : 'Jogador';
-      if (RoomSystem.isMaster) {
+      const isMaster = RoomSystem.isMaster;
+      document.getElementById('yourRole').textContent = isMaster ? 'Mestre' : 'Jogador';
+      document.getElementById('userRoleBadge').textContent = isMaster ? 'MESTRE' : 'JOGADOR';
+      document.getElementById('userRoleBadge').className = isMaster ? 'badge badge-gold' : 'badge badge-purple';
+
+      if (isMaster) {
         document.getElementById('masterActions').classList.remove('hidden');
       }
+
+      // Habilita o chat após entrar na sala
+      const chatInput = document.getElementById('chatInput');
+      chatInput.disabled = false;
+      chatInput.placeholder = "Digite sua mensagem...";
+      document.getElementById('chatSendBtn').disabled = false;
     }
 
     init();

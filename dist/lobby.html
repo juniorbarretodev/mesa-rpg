@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sala de Espera - RPG Platform</title>
-  <script type="module" crossorigin src="/assets/lobby-FCoV2czz.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/sounds-vUoiWWks.js">
-  <link rel="modulepreload" crossorigin href="/assets/dice-DtlRVfWd.js">
+  <script type="module" crossorigin src="/assets/lobby-CxVshQCh.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/sounds-gK9Dals0.js">
+  <link rel="modulepreload" crossorigin href="/assets/dice-CtbpK7_c.js">
   <link rel="stylesheet" crossorigin href="/assets/sounds-9glUlBov.css">
 </head>
 <body class="page">
@@ -48,9 +48,9 @@
               <p class="text-center text-muted">Aguardando mensagens...</p>
             </div>
             <form id="chatForm" class="flex gap-sm">
-              <input type="text" id="chatInput" class="input" placeholder="Digite sua mensagem..." autocomplete="off">
-              <button type="submit" class="btn btn-primary">Enviar</button>
-            </form>
+               <input type="text" id="chatInput" class="input" placeholder="Conectando..." autocomplete="off" disabled>
+               <button type="submit" class="btn btn-primary" id="chatSendBtn" disabled>Enviar</button>
+             </form>
           </div>
         </div>
 
@@ -70,7 +70,8 @@
             <div class="flex flex-col gap-sm">
               <div class="flex flex-between">
                 <span class="text-muted">Sua função:</span>
-                <span id="yourRole" class="badge badge-purple">---</span>
+                <span id="userRoleBadge" class="badge">---</span>
+                <span id="yourRole" class="hidden">Jogador</span>
               </div>
               <div class="flex flex-between">
                 <span class="text-muted">Status:</span>

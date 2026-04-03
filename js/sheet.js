@@ -5,6 +5,7 @@ import { RoomSystem } from './room.js';
 
 export const SheetSystem = {
   currentSheet: null,
+  playerSheets: {}, // Cache para o Mestre acessar todas as fichas da sala
   unsubscriber: null,
 
   async loadOrCreateSheet(roomCode) {

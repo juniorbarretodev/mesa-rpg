@@ -487,9 +487,9 @@
             <h3 class="panel-title">💬 Chat</h3>
             <div class="chat-messages" id="chatMessages" style="height: 200px; overflow-y: auto; padding: 0.5rem; background: var(--color-bg-secondary); border-radius: var(--radius-md);"></div>
             <form id="chatForm" class="flex gap-sm mt-md">
-              <input type="text" id="chatInput" class="input" placeholder="Digite sua mensagem..." autocomplete="off">
-              <button type="submit" class="btn btn-primary">Enviar</button>
-            </form>
+               <input type="text" id="chatInput" class="input" placeholder="Conectando..." autocomplete="off" disabled>
+               <button type="submit" class="btn btn-primary" id="chatSendBtn" disabled>Enviar</button>
+             </form>
           </div>
         </section>
 
@@ -568,12 +568,15 @@
       ChatSystem.subscribeToChat(roomCode, renderChat);
       ChatSystem.subscribeToDice(roomCode, renderRollHistory);
 
-      await MapSystem.initialize('mapWrapper');
-      MapSystem.subscribeToMap();
-      
       MasterSystem.setupNPCPanel();
       await MasterSystem.initialize();
       await BattleSystem.initialize();
+
+      // Habilita o chat após entrar na sala
+      const chatInput = document.getElementById('chatInput');
+      chatInput.disabled = false;
+      chatInput.placeholder = "Digite sua mensagem...";
+      document.getElementById('chatSendBtn').disabled = false;
     }
 
     function renderPlayers(players) {

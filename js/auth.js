@@ -42,10 +42,14 @@ export const AuthSystem = {
 
     await updateProfile(userCredential.user, { displayName: nick });
 
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      nick,
-      createdAt: serverTimestamp()
-    });
+    try {
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        nick,
+        createdAt: serverTimestamp()
+      });
+    } catch (dbError) {
+      console.warn("Firestore: Erro ao salvar perfil do usuário (pode ser regra de permissão):", dbError.message);
+    }
 
     this.currentUser = userCredential.user;
     this.currentNick = nick;
@@ -66,14 +70,17 @@ export const AuthSystem = {
 
       return userCredential.user;
     } catch (error) {
-      if (error.code === 'auth/user-not-found') {
-        alert("Usuário não encontrado!");
+      console.error("Erro ao logar:", error.code, error.message);
+      
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+        // Para novas versões do Firebase, invalid-credential abrange usuário não encontrado
+        console.warn("Usuário não encontrado ou credenciais inválidas.");
       } else if (error.code === 'auth/wrong-password') {
         alert("Senha incorreta!");
       } else {
-        console.error("Erro ao logar:", error.message);
+        alert("Erro ao entrar: " + (error.message || "Tente outro apelido ou senha"));
       }
-      throw error; // Throwing so index.html can handle the UI state (button loading, etc)
+      throw error; 
     }
   },
 

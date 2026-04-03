@@ -31,47 +31,19 @@ Siga estes passos para configurar o Firebase para o projeto:
 1. No menu lateral, clique em **Realtime Database**
 2. Clique em **Criar banco de dados**
 3. Escolha a localização (São Paulo para melhor performance)
-4. Selecione **Iniciar no modo de teste**
+4. Selecione **Iniciar no modo de teste** (isso facilitará o início)
 5. Clique em **Ativar**
-6. Depois clique em **Regras** e cole estas regras:
+6. Depois clique na aba **Regras** (no menu superior) e cole estas regras:
 
 ```json
 {
   "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
     "rooms": {
       "$roomId": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        
-        "masterId": {
-          ".read": "auth != null"
-        },
-        
         "chat": {
-          ".indexOn": ["timestamp"],
-          "$messageId": {
-            ".write": "auth != null && !data.exists()"
-          }
-        },
-        
-        "dice": {
-          ".read": "auth != null"
-        },
-        
-        "map": {
-          ".read": "auth != null",
-          ".write": "auth != null && auth.uid == root.child('rooms').child($roomId).child('masterId').val()"
-        },
-        
-        "presence": {
-          "$playerId": {
-            ".write": "auth != null && auth.uid == $playerId"
-          }
-        },
-        
-        "battleState": {
-          ".read": "auth != null",
-          ".write": "auth != null && auth.uid == root.child('rooms').child($roomId).child('masterId').val()"
+          ".indexOn": ["timestamp"]
         }
       }
     }
@@ -100,66 +72,31 @@ Siga estes passos para configurar o Firebase para o projeto:
 3. Escolha a mesma localização do Realtime DB
 4. Selecione **Iniciar no modo de teste**
 5. Clique em **Criar**
-6. Depois clique em **Regras** e cole estas regras:
+6. Depois clique na aba **Regras** (no menu superior) e cole estas regras:
 
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-    
-    function isMaster(roomData) {
-      return request.auth.uid == roomData.masterId;
-    }
-    
-    function isInRoom(roomId) {
-      return exists(/databases/$(database)/documents/rooms/$(roomId));
-    }
-    
-    function isRoomPlayer(roomId) {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
-    }
-    
+    // Permite ler/escrever perfis de usuário se estiver logado
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow read, write: if request.auth != null;
     }
     
+    // Regras para as salas
     match /rooms/{roomId} {
-      allow read: if isAuthenticated() && 
-        (isMaster(resource.data) || isRoomPlayer(roomId));
+      allow read, create: if request.auth != null;
+      allow update: if request.auth != null;
       
-      allow create: if isAuthenticated() && 
-        request.resource.data.masterId == request.auth.uid;
-      
-      allow update: if isAuthenticated() && isMaster(resource.data);
-      allow delete: if false;
-      
+      // Permite que jogadores se adicionem à lista da sala
       match /players/{playerId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && 
-          (playerId == request.auth.uid || isRoomPlayer(roomId));
+        allow read, write: if request.auth != null;
       }
     }
     
+    // Permite acesso às fichas
     match /sheets/{roomId}/{playerId} {
-      allow read: if isAuthenticated() && 
-        (isInRoom(roomId) && (isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data) || playerId == request.auth.uid));
-      
-      allow write: if isAuthenticated() && playerId == request.auth.uid && isInRoom(roomId);
-    }
-    
-    match /history/{roomId}/{sessionId} {
-      allow read: if isAuthenticated() && isInRoom(roomId);
-      allow write: if isAuthenticated() && isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data);
+      allow read, write: if request.auth != null;
     }
   }
 }

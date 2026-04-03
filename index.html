@@ -165,7 +165,26 @@
             throw new Error('Código da mesa é obrigatório');
           }
           
-          await AuthSystem.login(nick, password, roomCode);
+          try {
+            await AuthSystem.login(nick, password);
+          } catch (loginError) {
+            const isInvalid = loginError.code === 'auth/user-not-found' || loginError.code === 'auth/invalid-credential';
+            
+            if (isInvalid) {
+              // Tenta registrar usuário novo de forma transparente ao entrar em mesa
+              try {
+                await AuthSystem.register(nick, password);
+              } catch (regError) {
+                if (regError.code === 'auth/email-already-in-use') {
+                  throw new Error('Este apelido já está em uso por outro jogador com uma senha diferente.');
+                }
+                throw regError;
+              }
+            } else {
+              throw loginError;
+            }
+          }
+
           await RoomSystem.joinRoom(roomCode);
           
           SoundManager.playNotification();

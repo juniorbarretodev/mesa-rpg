@@ -75,37 +75,40 @@ export const RoomSystem = {
 
   async joinRoom(code) {
     checkInit();
-    const roomSnap = await getDoc(doc(db, 'rooms', code.toUpperCase()));
+    const upperCode = code.toUpperCase();
+    const roomSnap = await getDoc(doc(db, 'rooms', upperCode));
     
     if (!roomSnap.exists()) {
-      throw new Error('Sala não encontrada');
+      throw new Error('Sala não encontrada. Verifique o código e tente novamente.');
     }
 
     const roomData = roomSnap.data();
     const user = AuthSystem.currentUser;
 
+    if (!user) throw new Error('Usuário não autenticado');
+
     if (roomData.status === 'closed') {
       throw new Error('Esta sala foi encerrada');
     }
 
-    await setDoc(doc(db, 'rooms', code, 'players', user.uid), {
-      nick: AuthSystem.currentNick,
+    await setDoc(doc(db, 'rooms', upperCode, 'players', user.uid), {
+      nick: AuthSystem.currentNick || user.displayName || 'Jogador',
       role: 'player',
       online: true,
       joinedAt: serverTimestamp()
     }, { merge: true });
 
-    await set(ref(rtdb, `rooms/${code}/presence/${user.uid}`), {
+    await set(ref(rtdb, `rooms/${upperCode}/presence/${user.uid}`), {
       online: true,
       lastSeen: Date.now(),
-      nick: AuthSystem.currentNick,
-      role: 'player'
+      nick: AuthSystem.currentNick || user.displayName || 'Jogador',
+      role: roomData.masterId === user.uid ? 'master' : 'player'
     });
 
     this.currentRoom = roomData;
-    this.currentRoomCode = code;
+    this.currentRoomCode = upperCode;
     this.isMaster = roomData.masterId === user.uid;
-    AuthSystem.currentRoomCode = code;
+    AuthSystem.currentRoomCode = upperCode;
 
     return roomData;
   },
@@ -118,7 +121,6 @@ export const RoomSystem = {
       await setDoc(doc(db, 'rooms', code), { status: 'closed' }, { merge: true });
     } else {
       await remove(ref(rtdb, `rooms/${code}/presence/${user.uid}`));
-      await remove(ref(rtdb, `rooms/${code}/chat`));
     }
 
     this.cleanup();
