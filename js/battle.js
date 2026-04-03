@@ -261,7 +261,7 @@ export const BattleSystem = {
         await this.handleTokenDeath(targetId);
       }
     } else {
-      const sheetRef = doc(db, 'sheets', code, targetId);
+      const sheetRef = doc(db, 'sheets', code, 'players', targetId);
       const sheet = this.participantsData[targetId];
       
       if (sheet) {
@@ -311,7 +311,7 @@ export const BattleSystem = {
     };
 
     if (ability.manaCost) {
-      const sheetRef = doc(db, 'sheets', RoomSystem.currentRoomCode, playerId);
+      const sheetRef = doc(db, 'sheets', RoomSystem.currentRoomCode, 'players', playerId);
       const currentMana = this.playerAbilities[playerId]?.resources?.mana || 0;
       if (currentMana < ability.manaCost) {
         await ChatSystem.sendMessage(`⚠️ **${AuthSystem.currentNick}** não tem mana suficiente!`, 'system');

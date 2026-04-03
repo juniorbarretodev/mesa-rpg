@@ -52,6 +52,13 @@ service cloud.firestore {
       allow write: if isAuthenticated() && playerId == request.auth.uid && isInRoom(roomId);
     }
     
+    match /sheets/{roomId}/players/{playerId} {
+      allow read: if isAuthenticated() && 
+        (isInRoom(roomId) && (isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data) || playerId == request.auth.uid));
+      
+      allow write: if isAuthenticated() && playerId == request.auth.uid && isInRoom(roomId);
+    }
+    
     match /history/{roomId}/{sessionId} {
       allow read: if isAuthenticated() && isInRoom(roomId);
       allow write: if isAuthenticated() && isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data);

@@ -551,6 +551,14 @@
         await MapSystem.initialize('mapContainer');
         MapSystem.subscribeToMap();
 
+        // Configura o handler de drop de mapa para o MasterSystem
+        const mapWrapper = document.querySelector('.map-wrapper');
+        if (mapWrapper) {
+          mapWrapper.addEventListener('dragover', (e) => e.preventDefault());
+          mapWrapper.addEventListener('drop', (e) => MasterSystem.handleMapDrop(e));
+          console.log("[Master] Listeners de Drop no Mapa configurados.");
+        }
+
         // Inscreve nos ouvintes da sala
         RoomSystem.subscribeToRoom(roomCode, {
           onRoomUpdate: (room) => {
@@ -577,14 +585,6 @@
         chatInput.disabled = false;
         chatInput.placeholder = "Digite sua mensagem...";
         document.getElementById('chatSendBtn').disabled = false;
-        
-        // CORREÇÃO: Adiciona os listeners de Drop no Mapa após o MapSystem inicializar
-        const mapWrapper = document.querySelector('.map-wrapper');
-        if (mapWrapper) {
-          mapWrapper.addEventListener('dragover', (e) => e.preventDefault());
-          mapWrapper.addEventListener('drop', (e) => MasterSystem.handleMapDrop(e));
-          console.log("[Master] Listeners de Drop no Mapa configurados.");
-        }
 
         console.log("[Master] Sistemas prontos!");
 
