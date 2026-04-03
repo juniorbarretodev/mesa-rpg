@@ -34,7 +34,7 @@ export const MasterSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
 
-    const sheetsRef = collection(db, 'sheets', code);
+    const sheetsRef = collection(db, 'sheets', code, 'players');
     
     const listener = onSnapshot(sheetsRef, (snap) => {
       snap.forEach(doc => {
@@ -97,7 +97,7 @@ export const MasterSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
 
-    const sheetRef = doc(db, 'sheets', code, playerId);
+    const sheetRef = doc(db, 'sheets', code, 'players', playerId);
     const sheet = this.playerSheets[playerId];
     
     if (!sheet) return;
@@ -150,7 +150,7 @@ export const MasterSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
 
-    const sheetRef = doc(db, 'sheets', code, playerId);
+    const sheetRef = doc(db, 'sheets', code, 'players', playerId);
     const sheet = this.playerSheets[playerId];
     
     if (!sheet) return;

@@ -577,6 +577,15 @@
         chatInput.disabled = false;
         chatInput.placeholder = "Digite sua mensagem...";
         document.getElementById('chatSendBtn').disabled = false;
+        
+        // CORREÇÃO: Adiciona os listeners de Drop no Mapa após o MapSystem inicializar
+        const mapWrapper = document.querySelector('.map-wrapper');
+        if (mapWrapper) {
+          mapWrapper.addEventListener('dragover', (e) => e.preventDefault());
+          mapWrapper.addEventListener('drop', (e) => MasterSystem.handleMapDrop(e));
+          console.log("[Master] Listeners de Drop no Mapa configurados.");
+        }
+
         console.log("[Master] Sistemas prontos!");
 
       } catch (error) {
@@ -641,10 +650,6 @@
     }
 
     init();
-
-    const mapWrapper = document.getElementById('mapWrapper');
-    mapWrapper.addEventListener('dragover', (e) => e.preventDefault());
-    mapWrapper.addEventListener('drop', (e) => MasterSystem.handleMapDrop(e));
 
     async function rollDice(dice) {
       const display = document.getElementById('diceDisplay');

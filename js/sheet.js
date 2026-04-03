@@ -17,7 +17,7 @@ export const SheetSystem = {
       }
 
       console.log(`[SheetSystem] Carregando ficha para sala ${roomCode}, usuário ${user.uid}...`);
-      const sheetRef = doc(db, 'sheets', roomCode, user.uid);
+      const sheetRef = doc(db, 'sheets', roomCode, 'players', user.uid);
       
       console.log("[SheetSystem] Buscando documento no Firestore...");
       const sheetSnap = await getDoc(sheetRef);
@@ -68,7 +68,7 @@ export const SheetSystem = {
     const user = AuthSystem.currentUser;
     if (!user || !roomCode) return;
 
-    const sheetRef = doc(db, 'sheets', roomCode, user.uid);
+    const sheetRef = doc(db, 'sheets', roomCode, 'players', user.uid);
     this.unsubscriber = onSnapshot(sheetRef, (snap) => {
       if (snap.exists()) {
         this.currentSheet = { id: snap.id, ...snap.data() };
@@ -82,7 +82,7 @@ export const SheetSystem = {
     const user = AuthSystem.currentUser;
     if (!user || !roomCode) return;
 
-    const sheetRef = doc(db, 'sheets', roomCode, user.uid);
+    const sheetRef = doc(db, 'sheets', roomCode, 'players', user.uid);
     await updateDoc(sheetRef, {
       ...updates,
       updatedAt: serverTimestamp()

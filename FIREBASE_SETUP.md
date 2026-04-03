@@ -84,8 +84,8 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
     
-    // Regras para Fichas de Personagem
-    match /sheets/{roomId}/{userId} {
+    // Regras para Fichas de Personagem (4 segmentos)
+    match /sheets/{roomId}/players/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data));
       allow write: if isAuthenticated() && isOwner(userId);
     }
