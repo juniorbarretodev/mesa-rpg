@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -227,7 +228,7 @@
       transform: translateX(-50%);
       font-size: 0.6rem;
       white-space: nowrap;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0, 0, 0, 0.7);
       padding: 1px 4px;
       border-radius: 2px;
       color: white;
@@ -262,7 +263,7 @@
     .message {
       margin-bottom: 0.5rem;
       padding-bottom: 0.5rem;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .message:last-child {
@@ -355,8 +356,15 @@
     }
 
     @keyframes pulse-red {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
-      50% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5);
+      }
+
+      50% {
+        box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+      }
     }
 
     .turn-indicator {
@@ -364,7 +372,7 @@
       top: 70px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0,0,0,0.9);
+      background: rgba(0, 0, 0, 0.9);
       border: 2px solid var(--color-accent-gold);
       padding: 0.5rem 1.5rem;
       border-radius: var(--radius-md);
@@ -399,8 +407,15 @@
     }
 
     @keyframes glow-green {
-      0%, 100% { box-shadow: 0 0 5px rgba(22, 163, 74, 0.5); }
-      50% { box-shadow: 0 0 20px rgba(22, 163, 74, 0.8); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 5px rgba(22, 163, 74, 0.5);
+      }
+
+      50% {
+        box-shadow: 0 0 20px rgba(22, 163, 74, 0.8);
+      }
     }
 
     .battle-mode .chat-container {
@@ -414,11 +429,13 @@
     }
   </style>
 </head>
+
 <body class="page battle-mode">
   <div class="turn-indicator" id="turnIndicator"></div>
   <div class="battle-indicator" id="battleIndicator">⚔️ MODO BATALHA - Sua Vez!</div>
 
-  <header style="background: var(--color-bg-secondary); padding: 1rem 0; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
+  <header
+    style="background: var(--color-bg-secondary); padding: 1rem 0; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
     <div class="container">
       <div class="flex flex-between flex-center">
         <h1 style="font-size: 1.25rem; margin: 0;">🏰 RPG Platform</h1>
@@ -512,13 +529,13 @@
               <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d20">d20</button>
             </div>
             <div class="dice-result" id="diceResult">-</div>
-            
+
             <div class="chat-messages" id="chatMessages"></div>
-            
+
             <form class="chat-input-area" id="chatForm">
-               <input type="text" id="chatInput" class="input" placeholder="Conectando..." autocomplete="off" disabled>
-               <button type="submit" class="btn btn-primary" id="chatSendBtn" disabled>Enviar</button>
-             </form>
+              <input type="text" id="chatInput" class="input" placeholder="Conectando..." autocomplete="off" disabled>
+              <button type="submit" class="btn btn-primary" id="chatSendBtn" disabled>Enviar</button>
+            </form>
           </div>
         </section>
       </div>
@@ -535,6 +552,10 @@
     import { MapSystem } from './js/map.js';
     import { BattleSystem } from './js/battle.js';
 
+    // ✅ CORREÇÃO: leitura do código da sala pela URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCode = urlParams.get('code');
+
     async function init() {
       try {
         console.log("[Player] Iniciando sistemas...");
@@ -549,7 +570,7 @@
         document.getElementById('roomCode').textContent = roomCode;
 
         await RoomSystem.joinRoom(roomCode);
-        
+
         console.group(`[Player Page] Inicializando Mesa: ${roomCode}`);
         console.log('User UID:', AuthSystem.currentUser?.uid);
         console.log('Is Master?', RoomSystem.isMaster);
@@ -566,7 +587,7 @@
 
         SheetSystem.subscribeToSheet(roomCode, renderSheet);
         ChatSystem.subscribeToChat(roomCode, renderChat);
-        
+
         // Habilita o chat após entrar na sala
         const chatInput = document.getElementById('chatInput');
         chatInput.disabled = false;
@@ -603,7 +624,7 @@
       document.getElementById('staminaBar').style.width = `${staminaMax > 0 ? (stamina / staminaMax) * 100 : 0}%`;
 
       const statusContainer = document.getElementById('statusBadges');
-      statusContainer.innerHTML = (sheet.status || []).map(s => 
+      statusContainer.innerHTML = (sheet.status || []).map(s =>
         `<span class="status-badge ${s.startsWith('+') ? 'buff' : ''}">${s}</span>`
       ).join('');
 
@@ -665,7 +686,7 @@
       const container = document.getElementById('chatMessages');
       container.innerHTML = messages.slice(-50).map(m => {
         const time = new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        
+
         if (m.type === 'roll') {
           return `<div class="message"><span class="message-sender">${m.senderNick}</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div class="message-roll">🎲 ${m.text}</div></div>`;
         }
@@ -698,7 +719,7 @@
       tokensLayer.innerHTML = '';
       Object.values(MapSystem.tokens || {}).forEach(token => {
         if (!token.visible && !RoomSystem.isMaster) return;
-        
+
         const tokenEl = document.createElement('div');
         tokenEl.className = `map-token ${token.type}${!token.visible ? ' hidden' : ''}`;
         tokenEl.style.cssText = `left: ${token.x}px; top: ${token.y}px; border-color: ${token.color};`;
@@ -710,15 +731,15 @@
     function updateBattleDisplay(state) {
       const indicator = document.getElementById('battleIndicator');
       const turnIndicator = document.getElementById('turnIndicator');
-      
+
       if (state?.active) {
         indicator.classList.add('active');
         turnIndicator.classList.add('active');
-        
+
         const currentTurn = state.initiative?.find(i => (i.id || i) === state.turn);
         const name = typeof currentTurn === 'object' ? currentTurn?.name : currentTurn;
         const isYourTurn = state.turn === AuthSystem.currentUser?.uid;
-        
+
         turnIndicator.innerHTML = `
           <div class="turn-info">
             <span class="round-badge">Rodada ${state.round || 1}</span>
@@ -727,7 +748,7 @@
             </span>
           </div>
         `;
-        
+
         if (isYourTurn) {
           SoundManager.playNotification();
         }
@@ -746,12 +767,12 @@
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        
+
         document.getElementById('attacksList').classList.add('hidden');
         document.getElementById('spellsList').classList.add('hidden');
         document.getElementById('itemsList').classList.add('hidden');
         document.getElementById(`${tab.dataset.tab}List`).classList.remove('hidden');
-        
+
         SoundManager.playButtonClick();
       });
     });
@@ -772,7 +793,7 @@
       const text = document.getElementById('chatInput').value.trim();
       if (text) {
         const parsedAction = BattleSystem.parsePlayerAction(text, AuthSystem.currentUser?.uid);
-        
+
         if (parsedAction.detected) {
           const battleResult = await BattleSystem.processBattleAction(parsedAction);
           if (battleResult) {
@@ -781,7 +802,7 @@
         } else {
           await ChatSystem.sendMessage(text);
         }
-        
+
         document.getElementById('chatInput').value = '';
       }
     });
@@ -803,7 +824,7 @@
         if (!item || item.quantity <= 0) return;
 
         await ChatSystem.sendMessage(`usou **${item.name}**!`);
-        
+
         const match = item.effect?.match(/(\d*)d(\d+)/i);
         if (match) {
           const result = DiceSystem.roll(match[0]);
@@ -827,4 +848,5 @@
     });
   </script>
 </body>
+
 </html>
