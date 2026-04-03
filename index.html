@@ -33,13 +33,13 @@
           <input type="password" id="password" class="input" placeholder="Sua senha" required minlength="4">
         </div>
 
-        <div id="roomCodeGroup" class="input-group hidden">
+        <div id="roomCodeGroup" class="input-group">
           <label class="input-label" for="roomCode">Código da Mesa</label>
           <input type="text" id="roomCode" class="input" placeholder="ABCDE" maxlength="5" style="text-transform: uppercase; text-align: center; letter-spacing: 0.2em;">
         </div>
 
-        <div class="input-group">
-          <label class="input-label" for="roomName">Nome da Mesa <small id="roomNameHint" class="text-muted">(opcional)</small></label>
+        <div id="roomNameGroup" class="input-group hidden">
+          <label class="input-label" for="roomName">Nome da Mesa <small id="roomNameHint" class="text-muted">(obrigatório)</small></label>
           <input type="text" id="roomName" class="input" placeholder="A Maldição do Castelo">
         </div>
 
@@ -54,7 +54,7 @@
       <div class="divider"></div>
 
       <p class="text-center text-muted" style="font-size: 0.85rem;">
-        Primeira vez? Use qualquer senha para criar sua conta automaticamente.
+        Pode usar qualquer apelido e senha para criar sua conta.
       </p>
     </div>
   </div>
@@ -69,6 +69,7 @@
     const loginTabs = document.querySelectorAll('.login-tab');
     const loginError = document.getElementById('loginError');
     const roomCodeGroup = document.getElementById('roomCodeGroup');
+    const roomNameGroup = document.getElementById('roomNameGroup');
     const roomNameHint = document.getElementById('roomNameHint');
     const submitBtn = document.getElementById('submitBtn');
     const submitText = document.getElementById('submitText');
@@ -78,9 +79,28 @@
 
     // Verificação inicial de configuração
     if (!firebaseInitialized) {
-      loginError.textContent = 'Atenção: Configuração do Firebase não encontrada no arquivo .env. Verifique o guia FIREBASE_SETUP.md.';
+      loginError.textContent = 'Atenção: Configuração do Firebase não encontrada.';
       loginError.classList.remove('hidden');
     }
+
+    // Configuração inicial da UI baseada na aba ativa (Entrar)
+    function updateUI() {
+      if (mode === 'create') {
+        roomCodeGroup.classList.add('hidden');
+        roomNameGroup.classList.remove('hidden');
+        document.getElementById('roomCode').required = false;
+        document.getElementById('roomName').required = true;
+        submitText.textContent = 'Criar Mesa';
+      } else {
+        roomCodeGroup.classList.remove('hidden');
+        roomNameGroup.classList.add('hidden');
+        document.getElementById('roomCode').required = true;
+        document.getElementById('roomName').required = false;
+        submitText.textContent = 'Entrar na Mesa';
+      }
+    }
+
+    updateUI(); // Executa ao carregar para garantir o estado inicial correto
 
     loginTabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -88,17 +108,7 @@
         tab.classList.add('active');
         mode = tab.dataset.tab;
         
-        if (mode === 'create') {
-          roomCodeGroup.classList.add('hidden');
-          roomNameHint.textContent = '(obrigatório)';
-          document.getElementById('roomName').required = true;
-          submitText.textContent = 'Criar Mesa';
-        } else {
-          roomCodeGroup.classList.remove('hidden');
-          roomNameHint.textContent = '(opcional)';
-          document.getElementById('roomName').required = false;
-          submitText.textContent = 'Entrar na Mesa';
-        }
+        updateUI();
         
         try {
           SoundManager.playButtonClick();
