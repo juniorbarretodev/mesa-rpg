@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sala de Espera - RPG Platform</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body class="page">
+  <header class="main-header" style="background: var(--color-bg-secondary); padding: 1rem 0; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
+    <div class="container">
+      <div class="flex flex-between flex-center">
+        <h1 style="font-size: 1.5rem; margin: 0;">🏰 <span id="roomName">Carregando...</span></h1>
+        <div class="flex gap-md">
+          <span class="badge badge-gold">Código: <strong id="roomCode">-----</strong></span>
+          <button class="btn btn-secondary btn-sm" id="copyCodeBtn">Copiar Código</button>
+          <button class="btn btn-danger btn-sm" id="leaveBtn">Sair</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+      <div class="lobby-layout">
+        <div class="lobby-main">
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">🎮 Jogadores</h2>
+              <span id="playerCount" class="badge badge-blue">0 jogadores</span>
+            </div>
+            <div id="playersList" class="players-list">
+              <div class="loading">
+                <div class="loading-spinner"></div>
+                <span>Conectando...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel mt-md">
+            <div class="panel-header">
+              <h2 class="panel-title">💬 Chat</h2>
+            </div>
+            <div id="chatMessages" style="height: 300px; overflow-y: auto; padding: 1rem 0;">
+              <p class="text-center text-muted">Aguardando mensagens...</p>
+            </div>
+            <form id="chatForm" class="flex gap-sm">
+              <input type="text" id="chatInput" class="input" placeholder="Digite sua mensagem..." autocomplete="off">
+              <button type="submit" class="btn btn-primary">Enviar</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="lobby-sidebar">
+          <div id="masterActions" class="panel hidden">
+            <h3 class="panel-title mb-md">🎭 Ações do Mestre</h3>
+            <button class="btn btn-success btn-block mb-sm" id="startSessionBtn">
+              ▶️ Iniciar Sessão
+            </button>
+            <button class="btn btn-secondary btn-block" id="testSoundBtn">
+              🔊 Testar Som
+            </button>
+          </div>
+
+          <div class="panel">
+            <h3 class="panel-title mb-md">📋 Status</h3>
+            <div class="flex flex-col gap-sm">
+              <div class="flex flex-between">
+                <span class="text-muted">Sua função:</span>
+                <span id="yourRole" class="badge badge-purple">---</span>
+              </div>
+              <div class="flex flex-between">
+                <span class="text-muted">Status:</span>
+                <span id="roomStatus" class="badge badge-gold">Aguardando</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3 class="panel-title mb-md">🎲 Dados Rápidos</h3>
+            <div class="flex gap-sm flex-wrap">
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d4">1d4</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d6">1d6</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d8">1d8</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d10">1d10</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d12">1d12</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d20">1d20</button>
+            </div>
+            <div id="diceResult" class="mt-md text-center" style="font-size: 1.5rem; min-height: 2rem;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { AuthSystem } from './js/auth.js';
+    import { RoomSystem } from './js/room.js';
+    import { ChatSystem } from './js/chat.js';
+    import { DiceSystem } from './js/dice.js';
+    import { SoundManager } from './js/sounds.js';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCode = urlParams.get('code');
+
+    if (!roomCode) {
+      window.location.href = 'index.html';
+    }
+
+    if (!AuthSystem.isAuthenticated()) {
+      window.location.href = 'index.html';
+    }
+
+    document.getElementById('roomCode').textContent = roomCode;
+
+    function renderPlayers(players) {
+      const container = document.getElementById('playersList');
+      document.getElementById('playerCount').textContent = `${players.length} jogador${players.length !== 1 ? 'es' : ''}`;
+
+      if (players.length === 0) {
+        container.innerHTML = '<p class="text-center text-muted">Nenhum jogador conectado</p>';
+        return;
+      }
+
+      container.innerHTML = players.map(p => `
+        <div class="player-item">
+          <div class="player-avatar">${p.nick?.[0]?.toUpperCase() || '?'}</div>
+          <span class="player-name">${p.nick}</span>
+          <span class="player-status ${p.role === 'master' ? 'master' : ''} ${!p.online ? 'offline' : ''}">${p.role === 'master' ? 'Mestre' : p.online ? 'Online' : 'Offline'}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderChat(messages) {
+      const container = document.getElementById('chatMessages');
+      
+      if (messages.length === 0) {
+        container.innerHTML = '<p class="text-center text-muted">Aguardando mensagens...</p>';
+        return;
+      }
+
+      container.innerHTML = messages.map(m => {
+        const time = new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const typeClass = m.type === 'action' ? 'text-green' : m.type === 'roll' ? 'text-gold' : '';
+        return `<div class="mb-sm"><strong class="${typeClass}">${m.senderNick}</strong> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><br>${m.text}</div>`;
+      }).join('');
+      
+      container.scrollTop = container.scrollHeight;
+    }
+
+    RoomSystem.subscribeToRoom(roomCode, {
+      onRoomUpdate: (room) => {
+        document.getElementById('roomName').textContent = room.name;
+        document.getElementById('roomStatus').textContent = room.status === 'waiting' ? 'Aguardando' : room.status;
+        
+        if (room.status === 'playing') {
+          window.location.href = RoomSystem.isMaster ? `master.html?code=${roomCode}` : `player.html?code=${roomCode}`;
+        }
+      },
+      onPlayersUpdate: renderPlayers
+    });
+
+    ChatSystem.subscribeToChat(roomCode, renderChat);
+
+    document.getElementById('yourRole').textContent = RoomSystem.isMaster ? 'Mestre' : 'Jogador';
+    if (RoomSystem.isMaster) {
+      document.getElementById('masterActions').classList.remove('hidden');
+    }
+
+    document.getElementById('copyCodeBtn').addEventListener('click', () => {
+      navigator.clipboard.writeText(roomCode);
+      SoundManager.playButtonClick();
+      document.getElementById('copyCodeBtn').textContent = 'Copiado!';
+      setTimeout(() => {
+        document.getElementById('copyCodeBtn').textContent = 'Copiar Código';
+      }, 2000);
+    });
+
+    document.getElementById('leaveBtn').addEventListener('click', async () => {
+      await RoomSystem.leaveRoom(roomCode);
+      window.location.href = 'index.html';
+    });
+
+    document.getElementById('chatForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (text) {
+        await ChatSystem.sendMessage(text);
+        input.value = '';
+      }
+    });
+
+    document.getElementById('startSessionBtn').addEventListener('click', async () => {
+      await RoomSystem.startSession();
+      SoundManager.playBattleStart();
+    });
+
+    document.getElementById('testSoundBtn').addEventListener('click', () => {
+      SoundManager.playDiceRoll();
+      setTimeout(() => SoundManager.playDiceLand(), 500);
+    });
+
+    document.querySelectorAll('.dice-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const dice = btn.dataset.dice;
+        const result = await DiceSystem.rollWithAnimation(dice, null, { animate: false });
+        document.getElementById('diceResult').textContent = DiceSystem.formatResult(result);
+        SoundManager.playDiceRoll();
+        setTimeout(() => SoundManager.playDiceLand(), 300);
+        await ChatSystem.sendRoll(dice, result.results, result.total, 'Teste');
+      });
+    });
+
+    window.addEventListener('beforeunload', () => {
+      ChatSystem.unsubscribe();
+      RoomSystem.cleanup();
+    });
+  </script>
+</body>
+</html>

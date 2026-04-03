@@ -1,0 +1,41 @@
+{
+  "rules": {
+    "rooms": {
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        
+        "masterId": {
+          ".read": "auth != null"
+        },
+        
+        "chat": {
+          ".indexOn": ["timestamp"],
+          "$messageId": {
+            ".write": "auth != null && !data.exists()"
+          }
+        },
+        
+        "dice": {
+          ".read": "auth != null"
+        },
+        
+        "map": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid == root.child('rooms').child($roomId).child('masterId').val()"
+        },
+        
+        "presence": {
+          "$playerId": {
+            ".write": "auth != null && auth.uid == $playerId"
+          }
+        },
+        
+        "battleState": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid == root.child('rooms').child($roomId).child('masterId').val()"
+        }
+      }
+    }
+  }
+}

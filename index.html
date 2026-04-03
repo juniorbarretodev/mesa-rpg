@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPG Platform - Mesa Virtual</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo">🏰</div>
+        <h1 class="login-title">RPG Platform</h1>
+        <p class="login-subtitle">Sua mesa virtual de RPG</p>
+      </div>
+
+      <div class="login-tabs">
+        <button class="login-tab active" data-tab="login">Entrar</button>
+        <button class="login-tab" data-tab="create">Criar Mesa</button>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <div class="input-group">
+          <label class="input-label" for="nick">Apelido</label>
+          <input type="text" id="nick" class="input" placeholder="Seu nome na mesa" required minlength="2" maxlength="20">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="password">Senha</label>
+          <input type="password" id="password" class="input" placeholder="Sua senha" required minlength="4">
+        </div>
+
+        <div id="roomCodeGroup" class="input-group hidden">
+          <label class="input-label" for="roomCode">Código da Mesa</label>
+          <input type="text" id="roomCode" class="input" placeholder="ABCDE" maxlength="5" style="text-transform: uppercase; text-align: center; letter-spacing: 0.2em;">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="roomName">Nome da Mesa <small id="roomNameHint" class="text-muted">(opcional)</small></label>
+          <input type="text" id="roomName" class="input" placeholder="A Maldição do Castelo">
+        </div>
+
+        <div id="loginError" class="error-message hidden"></div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+          <span id="submitText">Entrar na Mesa</span>
+          <span id="submitLoader" class="loading-spinner hidden"></span>
+        </button>
+      </form>
+
+      <div class="divider"></div>
+
+      <p class="text-center text-muted" style="font-size: 0.85rem;">
+        Primeira vez? Use qualquer senha para criar sua conta automaticamente.
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { AuthSystem } from './js/auth.js';
+    import { RoomSystem } from './js/room.js';
+    import { SoundManager } from './js/sounds.js';
+    import { firebaseInitialized } from './js/firebase.js';
+
+    const loginForm = document.getElementById('loginForm');
+    const loginTabs = document.querySelectorAll('.login-tab');
+    const loginError = document.getElementById('loginError');
+    const roomCodeGroup = document.getElementById('roomCodeGroup');
+    const roomNameHint = document.getElementById('roomNameHint');
+    const submitBtn = document.getElementById('submitBtn');
+    const submitText = document.getElementById('submitText');
+    const submitLoader = document.getElementById('submitLoader');
+
+    let mode = 'login';
+
+    // Verificação inicial de configuração
+    if (!firebaseInitialized) {
+      loginError.textContent = 'Atenção: Configuração do Firebase não encontrada no arquivo .env. Verifique o guia FIREBASE_SETUP.md.';
+      loginError.classList.remove('hidden');
+    }
+
+    loginTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        loginTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        mode = tab.dataset.tab;
+        
+        if (mode === 'create') {
+          roomCodeGroup.classList.add('hidden');
+          roomNameHint.textContent = '(obrigatório)';
+          document.getElementById('roomName').required = true;
+          submitText.textContent = 'Criar Mesa';
+        } else {
+          roomCodeGroup.classList.remove('hidden');
+          roomNameHint.textContent = '(opcional)';
+          document.getElementById('roomName').required = false;
+          submitText.textContent = 'Entrar na Mesa';
+        }
+        
+        try {
+          SoundManager.playButtonClick();
+        } catch (e) {}
+        
+        if (firebaseInitialized) {
+          loginError.classList.add('hidden');
+        }
+      });
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (!firebaseInitialized) {
+        loginError.textContent = 'Erro: Configure o Firebase no arquivo .env antes de continuar.';
+        loginError.classList.remove('hidden');
+        return;
+      }
+
+      const nick = document.getElementById('nick').value.trim();
+      const password = document.getElementById('password').value;
+      const roomCode = document.getElementById('roomCode').value.trim().toUpperCase();
+      const roomName = document.getElementById('roomName').value.trim();
+
+      submitBtn.disabled = true;
+      submitText.textContent = mode === 'create' ? 'Criando...' : 'Entrando...';
+      submitLoader.classList.remove('hidden');
+      loginError.classList.add('hidden');
+
+      try {
+        if (mode === 'create') {
+          if (!roomName) {
+            throw new Error('Nome da mesa é obrigatório');
+          }
+          
+          await AuthSystem.register(nick, password, 'temp');
+          const code = await RoomSystem.createRoom(roomName);
+          
+          SoundManager.playNotification();
+          window.location.href = `lobby.html?code=${code}`;
+        } else {
+          if (!roomCode) {
+            throw new Error('Código da mesa é obrigatório');
+          }
+          
+          await AuthSystem.login(nick, password, roomCode);
+          await RoomSystem.joinRoom(roomCode);
+          
+          SoundManager.playNotification();
+          
+          if (RoomSystem.isMaster) {
+            window.location.href = `master.html?code=${roomCode}`;
+          } else {
+            window.location.href = `lobby.html?code=${roomCode}`;
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        loginError.textContent = error.message || 'Ocorreu um erro inesperado';
+        loginError.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitText.textContent = mode === 'create' ? 'Criar Mesa' : 'Entrar na Mesa';
+        submitLoader.classList.add('hidden');
+      }
+    });
+
+    try {
+      SoundManager.preload();
+    } catch (e) {}
+  </script>
+</body>
+</html>

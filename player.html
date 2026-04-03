@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel do Jogador - RPG Platform</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/map.css">
+  <style>
+    .player-layout {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      gap: 1rem;
+      min-height: calc(100vh - 80px);
+    }
+
+    .sheet-section {
+      background: var(--color-bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(212, 175, 55, 0.2);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .sheet-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .avatar {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: var(--color-bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      border: 2px solid var(--color-accent-gold);
+    }
+
+    .char-info h3 {
+      margin: 0;
+      font-size: 1.25rem;
+    }
+
+    .char-info p {
+      margin: 0;
+      color: var(--color-text-secondary);
+      font-size: 0.9rem;
+    }
+
+    .resource-bar {
+      margin-bottom: 0.75rem;
+    }
+
+    .resource-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.25rem;
+      font-size: 0.85rem;
+    }
+
+    .bar-container {
+      height: 20px;
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .bar-fill.hp {
+      background: linear-gradient(90deg, #dc2626, #ef4444);
+    }
+
+    .bar-fill.mana {
+      background: linear-gradient(90deg, #2563eb, #3b82f6);
+    }
+
+    .bar-fill.stamina {
+      background: linear-gradient(90deg, #16a34a, #22c55e);
+    }
+
+    .status-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .status-badge {
+      padding: 0.25rem 0.75rem;
+      background: rgba(220, 38, 38, 0.2);
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      color: var(--color-accent-red);
+    }
+
+    .status-badge.buff {
+      background: rgba(22, 163, 74, 0.2);
+      color: var(--color-accent-green);
+    }
+
+    .ability-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .ability-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .ability-item:hover {
+      background: var(--color-bg-tertiary);
+      transform: translateX(5px);
+    }
+
+    .ability-name {
+      font-weight: 500;
+    }
+
+    .ability-dice {
+      color: var(--color-accent-gold);
+      font-weight: 600;
+    }
+
+    .ability-cost {
+      font-size: 0.8rem;
+      color: var(--color-text-secondary);
+    }
+
+    .map-viewer {
+      background: var(--color-bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(212, 175, 55, 0.2);
+      aspect-ratio: 16/10;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .map-placeholder {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--color-text-muted);
+      text-align: center;
+    }
+
+    .map-wrapper {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    .map-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .tokens-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-token {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 0.9rem;
+      pointer-events: none;
+    }
+
+    .map-token.player {
+      border-color: #d4af37 !important;
+      background-color: rgba(212, 175, 55, 0.3) !important;
+    }
+
+    .map-token.enemy {
+      border-color: #dc2626 !important;
+      background-color: rgba(220, 38, 38, 0.3) !important;
+    }
+
+    .map-token.npc {
+      border-color: #3b82f6 !important;
+      background-color: rgba(59, 130, 246, 0.3) !important;
+    }
+
+    .map-token.object {
+      border-color: #6b7280 !important;
+      background-color: rgba(107, 114, 128, 0.3) !important;
+    }
+
+    .token-name {
+      position: absolute;
+      top: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.6rem;
+      white-space: nowrap;
+      background: rgba(0,0,0,0.7);
+      padding: 1px 4px;
+      border-radius: 2px;
+      color: white;
+    }
+
+    .map-token.hidden {
+      opacity: 0.2;
+    }
+
+    .chat-container {
+      background: var(--color-bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(212, 175, 55, 0.2);
+      height: 280px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem;
+    }
+
+    .chat-input-area {
+      padding: 0.75rem;
+      border-top: 1px solid rgba(212, 175, 55, 0.2);
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .message {
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .message:last-child {
+      border-bottom: none;
+    }
+
+    .message-sender {
+      font-weight: 600;
+      color: var(--color-accent-gold);
+    }
+
+    .message-roll {
+      background: rgba(212, 175, 55, 0.1);
+      padding: 0.25rem 0.5rem;
+      border-radius: var(--radius-sm);
+      display: inline-block;
+    }
+
+    .message-system {
+      color: var(--color-accent-purple);
+      font-style: italic;
+    }
+
+    .message-battle {
+      color: var(--color-accent-red);
+      border-left: 2px solid var(--color-accent-red);
+      padding-left: 0.5rem;
+    }
+
+    .dice-quick-panel {
+      display: flex;
+      gap: 0.25rem;
+      padding: 0.5rem;
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius-md);
+      margin-bottom: 0.5rem;
+    }
+
+    .dice-result {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--color-accent-gold);
+      min-height: 2rem;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .tab {
+      padding: 0.5rem 1rem;
+      background: transparent;
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: var(--radius-md);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .tab:hover {
+      border-color: var(--color-accent-gold);
+    }
+
+    .tab.active {
+      background: var(--color-accent-gold);
+      border-color: var(--color-accent-gold);
+      color: var(--color-bg-primary);
+    }
+
+    .battle-indicator {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--color-accent-red);
+      color: white;
+      padding: 0.5rem 2rem;
+      border-radius: var(--radius-md);
+      font-weight: bold;
+      z-index: 100;
+      display: none;
+      animation: pulse-red 1s infinite;
+    }
+
+    .battle-indicator.active {
+      display: block;
+    }
+
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+      50% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+    }
+
+    .turn-indicator {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.9);
+      border: 2px solid var(--color-accent-gold);
+      padding: 0.5rem 1.5rem;
+      border-radius: var(--radius-md);
+      z-index: 99;
+      display: none;
+    }
+
+    .turn-indicator.active {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .turn-info {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .round-badge {
+      background: var(--color-accent-gold);
+      color: var(--color-bg-primary);
+      padding: 0.25rem 0.5rem;
+      border-radius: var(--radius-sm);
+      font-weight: bold;
+      font-size: 0.85rem;
+    }
+
+    .your-turn {
+      background: var(--color-accent-green) !important;
+      animation: glow-green 1s infinite;
+    }
+
+    @keyframes glow-green {
+      0%, 100% { box-shadow: 0 0 5px rgba(22, 163, 74, 0.5); }
+      50% { box-shadow: 0 0 20px rgba(22, 163, 74, 0.8); }
+    }
+
+    .battle-mode .chat-container {
+      border-color: var(--color-accent-red);
+    }
+
+    @media (max-width: 900px) {
+      .player-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body class="page battle-mode">
+  <div class="turn-indicator" id="turnIndicator"></div>
+  <div class="battle-indicator" id="battleIndicator">⚔️ MODO BATALHA - Sua Vez!</div>
+
+  <header style="background: var(--color-bg-secondary); padding: 1rem 0; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
+    <div class="container">
+      <div class="flex flex-between flex-center">
+        <h1 style="font-size: 1.25rem; margin: 0;">🏰 RPG Platform</h1>
+        <div class="flex gap-md flex-center">
+          <span class="badge badge-gold" id="roomCode">-----</span>
+          <button class="btn btn-secondary btn-sm" id="soundToggle">🔊</button>
+          <button class="btn btn-danger btn-sm" id="leaveBtn">Sair</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+      <div class="player-layout">
+        <aside class="character-sheet">
+          <div class="sheet-section">
+            <div class="sheet-header">
+              <div class="avatar" id="charAvatar">?</div>
+              <div class="char-info">
+                <h3 id="charName">Carregando...</h3>
+                <p id="charClass">---</p>
+              </div>
+            </div>
+
+            <div class="resource-bar">
+              <div class="resource-label">
+                <span>❤️ HP</span>
+                <span id="hpText">0 / 0</span>
+              </div>
+              <div class="bar-container">
+                <div class="bar-fill hp" id="hpBar" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div class="resource-bar">
+              <div class="resource-label">
+                <span>💧 Mana</span>
+                <span id="manaText">0 / 0</span>
+              </div>
+              <div class="bar-container">
+                <div class="bar-fill mana" id="manaBar" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div class="resource-bar">
+              <div class="resource-label">
+                <span>⚡ Estamina</span>
+                <span id="staminaText">0 / 0</span>
+              </div>
+              <div class="bar-container">
+                <div class="bar-fill stamina" id="staminaBar" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div class="status-badges" id="statusBadges"></div>
+          </div>
+
+          <div class="tabs">
+            <button class="tab active" data-tab="attacks">⚔️ Ataques</button>
+            <button class="tab" data-tab="spells">✨ Magias</button>
+            <button class="tab" data-tab="items">🎒 Itens</button>
+          </div>
+
+          <div class="sheet-section">
+            <div id="attacksList" class="ability-list"></div>
+            <div id="spellsList" class="ability-list hidden"></div>
+            <div id="itemsList" class="ability-list hidden"></div>
+          </div>
+        </aside>
+
+        <section class="main-area">
+          <div class="map-viewer" id="mapViewer">
+            <div id="mapWrapper" class="map-wrapper">
+              <img id="mapImage" class="map-image" style="display: none;">
+              <div id="tokensLayer" class="tokens-layer"></div>
+              <div class="map-placeholder" id="mapPlaceholder">
+                <p style="font-size: 3rem; margin-bottom: 1rem;">🗺️</p>
+                <p>Mapa da Mesa</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-container mt-md">
+            <div class="dice-quick-panel">
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d4">d4</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d6">d6</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d8">d8</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d10">d10</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d12">d12</button>
+              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d20">d20</button>
+            </div>
+            <div class="dice-result" id="diceResult">-</div>
+            
+            <div class="chat-messages" id="chatMessages"></div>
+            
+            <form class="chat-input-area" id="chatForm">
+              <input type="text" id="chatInput" class="input" placeholder="Digite sua mensagem ou use uma habilidade..." autocomplete="off">
+              <button type="submit" class="btn btn-primary">Enviar</button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { AuthSystem } from './js/auth.js';
+    import { RoomSystem } from './js/room.js';
+    import { ChatSystem } from './js/chat.js';
+    import { SheetSystem } from './js/sheet.js';
+    import { DiceSystem } from './js/dice.js';
+    import { SoundManager } from './js/sounds.js';
+    import { MapSystem } from './js/map.js';
+    import { BattleSystem } from './js/battle.js';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCode = urlParams.get('code');
+
+    if (!roomCode || !AuthSystem.isAuthenticated()) {
+      window.location.href = 'index.html';
+    }
+
+    document.getElementById('roomCode').textContent = roomCode;
+
+    await RoomSystem.joinRoom(roomCode);
+    await SheetSystem.loadOrCreateSheet(roomCode);
+    await BattleSystem.initialize();
+
+    function renderSheet(sheet) {
+      if (!sheet) return;
+
+      document.getElementById('charAvatar').textContent = sheet.name?.[0]?.toUpperCase() || '?';
+      document.getElementById('charName').textContent = sheet.name;
+      document.getElementById('charClass').textContent = `${sheet.class} Nv. ${sheet.level}`;
+
+      document.getElementById('hpText').textContent = `${sheet.hp} / ${sheet.hpMax}`;
+      document.getElementById('hpBar').style.width = `${(sheet.hp / sheet.hpMax) * 100}%`;
+
+      const mana = sheet.resources?.mana || 0;
+      const manaMax = sheet.resources?.manaMax || sheet.resources?.mana || 0;
+      document.getElementById('manaText').textContent = `${mana} / ${manaMax}`;
+      document.getElementById('manaBar').style.width = `${manaMax > 0 ? (mana / manaMax) * 100 : 0}%`;
+
+      const stamina = sheet.resources?.stamina || 0;
+      const staminaMax = sheet.resources?.staminaMax || sheet.resources?.stamina || 0;
+      document.getElementById('staminaText').textContent = `${stamina} / ${staminaMax}`;
+      document.getElementById('staminaBar').style.width = `${staminaMax > 0 ? (stamina / staminaMax) * 100 : 0}%`;
+
+      const statusContainer = document.getElementById('statusBadges');
+      statusContainer.innerHTML = (sheet.status || []).map(s => 
+        `<span class="status-badge ${s.startsWith('+') ? 'buff' : ''}">${s}</span>`
+      ).join('');
+
+      const attacksContainer = document.getElementById('attacksList');
+      attacksContainer.innerHTML = (sheet.attacks || []).map(a => `
+        <div class="ability-item" data-ability="${a.name}" data-type="attack">
+          <div>
+            <div class="ability-name">${a.name}</div>
+            <div class="ability-cost">${a.description || 'Ataque básico'}</div>
+          </div>
+          <div class="ability-dice">${a.dice}${a.bonus ? ' +' + a.bonus : ''}</div>
+        </div>
+      `).join('') || '<p class="text-muted">Nenhum ataque cadastrado</p>';
+
+      const spellsContainer = document.getElementById('spellsList');
+      spellsContainer.innerHTML = (sheet.spells || []).map(s => `
+        <div class="ability-item" data-ability="${s.name}" data-type="spell">
+          <div>
+            <div class="ability-name">${s.name}</div>
+            <div class="ability-cost">${s.manaCost ? `💧 ${s.manaCost}` : ''} ${s.range ? `📏 ${s.range}` : ''}</div>
+          </div>
+          <div class="ability-dice">${s.dice}</div>
+        </div>
+      `).join('') || '<p class="text-muted">Nenhuma magia cadastrada</p>';
+
+      const itemsContainer = document.getElementById('itemsList');
+      itemsContainer.innerHTML = (sheet.items || []).map(i => `
+        <div class="ability-item" data-item="${i.name}">
+          <div>
+            <div class="ability-name">${i.name}</div>
+            <div class="ability-cost">${i.effect} x${i.quantity}</div>
+          </div>
+          <button class="btn btn-success btn-sm" onclick="PlayerActions.useItem('${i.id}')">Usar</button>
+        </div>
+      `).join('') || '<p class="text-muted">Nenhum item</p>';
+
+      attachAbilityListeners(sheet);
+    }
+
+    function attachAbilityListeners(sheet) {
+      document.querySelectorAll('.ability-item[data-ability]').forEach(item => {
+        item.onclick = null;
+        item.addEventListener('click', async () => {
+          const abilityName = item.dataset.ability;
+          const ability = [...(sheet.attacks || []), ...(sheet.spells || [])].find(a => a.name === abilityName);
+          if (ability) {
+            await ChatSystem.sendMessage(`usa **${abilityName}**`);
+            const result = await DiceSystem.rollWithAnimation(ability.dice, null, { animate: false });
+            await ChatSystem.sendRoll(ability.dice, result.results, result.total, abilityName);
+            document.getElementById('diceResult').textContent = DiceSystem.formatResult(result);
+            SoundManager.playDiceRoll();
+            setTimeout(() => SoundManager.playDiceLand(), 300);
+          }
+        });
+      });
+    }
+
+    function renderChat(messages) {
+      const container = document.getElementById('chatMessages');
+      container.innerHTML = messages.slice(-50).map(m => {
+        const time = new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        
+        if (m.type === 'roll') {
+          return `<div class="message"><span class="message-sender">${m.senderNick}</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div class="message-roll">🎲 ${m.text}</div></div>`;
+        }
+        if (m.type === 'system') {
+          return `<div class="message message-system"><span class="text-muted" style="font-size: 0.75rem;">${time}</span> ${m.text}</div>`;
+        }
+        if (m.type === 'battle') {
+          return `<div class="message message-battle"><span class="message-sender">${m.senderNick}</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div>${m.text}</div></div>`;
+        }
+        return `<div class="message"><span class="message-sender">${m.senderNick}:</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div>${m.text}</div></div>`;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function updateMapDisplay() {
+      const mapData = MapSystem.currentMap;
+      const mapPlaceholder = document.getElementById('mapPlaceholder');
+      const mapImage = document.getElementById('mapImage');
+      const tokensLayer = document.getElementById('tokensLayer');
+
+      if (mapData?.imageUrl) {
+        mapPlaceholder.style.display = 'none';
+        mapImage.src = mapData.imageUrl;
+        mapImage.style.display = 'block';
+      } else {
+        mapPlaceholder.style.display = 'block';
+        mapImage.style.display = 'none';
+      }
+
+      tokensLayer.innerHTML = '';
+      Object.values(MapSystem.tokens || {}).forEach(token => {
+        if (!token.visible && !RoomSystem.isMaster) return;
+        
+        const tokenEl = document.createElement('div');
+        tokenEl.className = `map-token ${token.type}${!token.visible ? ' hidden' : ''}`;
+        tokenEl.style.cssText = `left: ${token.x}px; top: ${token.y}px; border-color: ${token.color};`;
+        tokenEl.innerHTML = `<span>${token.name?.charAt(0).toUpperCase() || '?'}</span><div class="token-name">${token.name}</div>`;
+        tokensLayer.appendChild(tokenEl);
+      });
+    }
+
+    function updateBattleDisplay(state) {
+      const indicator = document.getElementById('battleIndicator');
+      const turnIndicator = document.getElementById('turnIndicator');
+      
+      if (state?.active) {
+        indicator.classList.add('active');
+        turnIndicator.classList.add('active');
+        
+        const currentTurn = state.initiative?.find(i => (i.id || i) === state.turn);
+        const name = typeof currentTurn === 'object' ? currentTurn?.name : currentTurn;
+        const isYourTurn = state.turn === AuthSystem.currentUser?.uid;
+        
+        turnIndicator.innerHTML = `
+          <div class="turn-info">
+            <span class="round-badge">Rodada ${state.round || 1}</span>
+            <span class="${isYourTurn ? 'your-turn' : ''}" style="padding: 0.25rem 0.5rem; border-radius: 4px; background: ${isYourTurn ? 'var(--color-accent-green)' : 'var(--color-bg-secondary)'};">
+              ${isYourTurn ? '✨ SUA VEZ!' : `Vez de: ${name || '---'}`}
+            </span>
+          </div>
+        `;
+        
+        if (isYourTurn) {
+          SoundManager.playNotification();
+        }
+      } else {
+        indicator.classList.remove('active');
+        turnIndicator.classList.remove('active');
+      }
+    }
+
+    SheetSystem.subscribeToSheet(roomCode, renderSheet);
+    ChatSystem.subscribeToChat(roomCode, renderChat);
+
+    MapSystem.subscribeToMap();
+    setInterval(() => {
+      updateMapDisplay();
+      updateBattleDisplay(BattleSystem.battleState);
+    }, 1000);
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        document.getElementById('attacksList').classList.add('hidden');
+        document.getElementById('spellsList').classList.add('hidden');
+        document.getElementById('itemsList').classList.add('hidden');
+        document.getElementById(`${tab.dataset.tab}List`).classList.remove('hidden');
+        
+        SoundManager.playButtonClick();
+      });
+    });
+
+    document.querySelectorAll('.dice-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const dice = btn.dataset.dice;
+        const result = await DiceSystem.rollWithAnimation(dice, null, { animate: false });
+        document.getElementById('diceResult').textContent = DiceSystem.formatResult(result);
+        await ChatSystem.sendRoll(dice, result.results, result.total, 'Teste');
+        SoundManager.playDiceRoll();
+        setTimeout(() => SoundManager.playDiceLand(), 300);
+      });
+    });
+
+    document.getElementById('chatForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = document.getElementById('chatInput').value.trim();
+      if (text) {
+        const parsedAction = BattleSystem.parsePlayerAction(text, AuthSystem.currentUser?.uid);
+        
+        if (parsedAction.detected) {
+          const battleResult = await BattleSystem.processBattleAction(parsedAction);
+          if (battleResult) {
+            await ChatSystem.sendMessage(battleResult.text, battleResult.type);
+          }
+        } else {
+          await ChatSystem.sendMessage(text);
+        }
+        
+        document.getElementById('chatInput').value = '';
+      }
+    });
+
+    document.getElementById('soundToggle').addEventListener('click', () => {
+      const muted = SoundManager.toggleMute();
+      document.getElementById('soundToggle').textContent = muted ? '🔇' : '🔊';
+    });
+
+    document.getElementById('leaveBtn').addEventListener('click', async () => {
+      await RoomSystem.leaveRoom(roomCode);
+      window.location.href = 'index.html';
+    });
+
+    const PlayerActions = {
+      async useItem(itemId) {
+        const sheet = SheetSystem.currentSheet;
+        const item = sheet?.items?.find(i => i.id === itemId);
+        if (!item || item.quantity <= 0) return;
+
+        await ChatSystem.sendMessage(`usou **${item.name}**!`);
+        
+        const match = item.effect?.match(/(\d*)d(\d+)/i);
+        if (match) {
+          const result = DiceSystem.roll(match[0]);
+          await ChatSystem.sendRoll(match[0], result.results, result.total, item.name);
+          SoundManager.playDiceRoll();
+          setTimeout(() => SoundManager.playDiceLand(), 300);
+        }
+
+        await SheetSystem.removeItem(itemId);
+      }
+    };
+
+    window.PlayerActions = PlayerActions;
+
+    window.addEventListener('beforeunload', () => {
+      ChatSystem.unsubscribe();
+      MapSystem.unsubscribe();
+      SheetSystem.unsubscribe();
+      BattleSystem.cleanup();
+      RoomSystem.cleanup();
+    });
+  </script>
+</body>
+</html>
