@@ -135,7 +135,17 @@
             throw new Error('Nome da mesa é obrigatório');
           }
           
-          await AuthSystem.register(nick, password, 'temp');
+          try {
+            await AuthSystem.register(nick, password);
+          } catch (regError) {
+            // Se o usuário já existe, tentamos apenas logar
+            if (regError.code === 'auth/email-already-in-use') {
+              await AuthSystem.login(nick, password);
+            } else {
+              throw regError;
+            }
+          }
+
           const code = await RoomSystem.createRoom(roomName);
           
           SoundManager.playNotification();
