@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meu Perfil - RPG Platform</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body class="page">
+  <header class="main-header">
+    <div class="container">
+      <div class="flex flex-between flex-center">
+        <a href="index.html" class="btn btn-secondary btn-sm">⬅️ Voltar</a>
+        <h1 style="font-size: 1.5rem; margin: 0;">👤 Meu Perfil</h1>
+        <div style="width: 80px;"></div> <!-- Spacer -->
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+      <div class="card profile-card">
+        <div class="card-header">Configurações de Personagem Global</div>
+        <div class="card-body">
+          <form id="profileForm">
+            <div class="profile-avatar-setup">
+              <div class="profile-avatar-preview" id="avatarPreview">
+                <span id="avatarPlaceholder">?</span>
+              </div>
+              <div class="file-input-wrapper">
+                <button type="button" class="btn btn-secondary">Alterar Foto (imgBB)</button>
+                <input type="file" id="avatarInput" accept="image/*">
+              </div>
+              <p class="text-muted text-center" style="font-size: 0.85rem;">
+                Esta imagem será usada como seu avatar padrão em todas as novas mesas.
+              </p>
+            </div>
+
+            <div class="profile-info-grid">
+              <div class="form-group">
+                <label class="input-label">Apelido / Nome do Personagem</label>
+                <input type="text" id="profileNick" class="input" placeholder="Ex: Arathor, o Bravo" required>
+              </div>
+              <div class="form-group">
+                <label class="input-label">Classe Favorita</label>
+                <input type="text" id="profileClass" class="input" placeholder="Ex: Guerreiro">
+              </div>
+            </div>
+
+            <div class="form-group mt-md">
+              <label class="input-label">Biografia / Descrição Curta</label>
+              <textarea id="profileBio" class="input" rows="3" placeholder="Conte um pouco sobre seu personagem..."></textarea>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="flex flex-end gap-sm">
+              <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
+              <button type="submit" class="btn btn-primary" id="saveBtn">Salvar Alterações</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { AuthSystem } from './js/auth.js';
+    import { SoundManager } from './js/sounds.js';
+
+    const IMGBB_API_KEY = '00e4e8b63e8248b4e584774dad7cff00'; // Fallback se não houver no env
+    const IMGBB_URL = 'https://api.imgbb.com/1/upload';
+
+    async function init() {
+      await AuthSystem.waitForInitialization();
+      
+      if (!AuthSystem.isAuthenticated()) {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      const profile = await AuthSystem.getUserProfile();
+      if (profile) {
+        document.getElementById('profileNick').value = profile.nick || AuthSystem.currentNick || '';
+        document.getElementById('profileClass').value = profile.favoriteClass || '';
+        document.getElementById('profileBio').value = profile.bio || '';
+        
+        if (profile.avatarUrl) {
+          updateAvatarPreview(profile.avatarUrl);
+        } else {
+          document.getElementById('avatarPlaceholder').textContent = (profile.nick || AuthSystem.currentNick || '?')[0].toUpperCase();
+        }
+      }
+    }
+
+    function updateAvatarPreview(url) {
+      const preview = document.getElementById('avatarPreview');
+      preview.innerHTML = `<img src="${url}" alt="Avatar">`;
+    }
+
+    document.getElementById('avatarInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const saveBtn = document.getElementById('saveBtn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Enviando imagem...';
+
+      try {
+        const formData = new FormData();
+        formData.append('key', IMGBB_API_KEY);
+        formData.append('image', file);
+
+        const response = await fetch(IMGBB_URL, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          const imageUrl = data.data.url;
+          updateAvatarPreview(imageUrl);
+          window.pendingAvatarUrl = imageUrl;
+          SoundManager.playNotification();
+        } else {
+          throw new Error('Falha no upload');
+        }
+      } catch (err) {
+        alert('Erro ao carregar imagem no imgBB. Verifique sua chave API.');
+        console.error(err);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Salvar Alterações';
+      }
+    });
+
+    document.getElementById('profileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      SoundManager.playButtonClick();
+      
+      const saveBtn = document.getElementById('saveBtn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Salvando...';
+
+      const updates = {
+        nick: document.getElementById('profileNick').value,
+        favoriteClass: document.getElementById('profileClass').value,
+        bio: document.getElementById('profileBio').value
+      };
+
+      if (window.pendingAvatarUrl) {
+        updates.avatarUrl = window.pendingAvatarUrl;
+      }
+
+      try {
+        await AuthSystem.updateUserProfile(updates);
+        alert('Perfil atualizado com sucesso!');
+        window.location.href = 'index.html';
+      } catch (err) {
+        alert('Erro ao salvar perfil.');
+        console.error(err);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Salvar Alterações';
+      }
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+
+    init();
+  </script>
+</body>
+</html>

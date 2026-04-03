@@ -20,11 +20,14 @@ export const SheetSystem = {
       return this.currentSheet;
     }
 
+    // Se não existir ficha na sala, busca os dados Globais do Perfil
+    const globalProfile = await AuthSystem.getUserProfile();
+
     const defaultSheet = {
-      name: AuthSystem.currentNick,
-      class: 'Aventureiro',
+      name: globalProfile?.nick || AuthSystem.currentNick || 'Novo Aventureiro',
+      class: globalProfile?.favoriteClass || 'Aventureiro',
       level: 1,
-      avatarUrl: '',
+      avatarUrl: globalProfile?.avatarUrl || '',
       hp: 20,
       hpMax: 20,
       resources: { mana: 10, stamina: 10 },

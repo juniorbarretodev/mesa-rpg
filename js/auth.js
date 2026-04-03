@@ -99,6 +99,36 @@ export const AuthSystem = {
     });
   },
 
+  async updateUserProfile(updates) {
+    checkInit();
+    const user = this.currentUser || auth.currentUser;
+    if (!user) throw new Error('Usuário não autenticado');
+
+    const profileRef = doc(db, 'users', user.uid);
+    
+    // Atualiza o perfil no Firebase Auth também (especialmente o displayName)
+    if (updates.nick) {
+      await updateProfile(user, { displayName: updates.nick });
+      this.currentNick = updates.nick;
+    }
+
+    await setDoc(profileRef, {
+      ...updates,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    return true;
+  },
+
+  async getUserProfile() {
+    checkInit();
+    const user = this.currentUser || auth.currentUser;
+    if (!user) return null;
+
+    const profileSnap = await getDoc(doc(db, 'users', user.uid));
+    return profileSnap.exists() ? profileSnap.data() : null;
+  },
+
   isAuthenticated() {
     return auth.currentUser !== null;
   }
