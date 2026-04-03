@@ -1,12 +1,12 @@
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
   updateProfile
 } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db, APP_INTERNAL_DOMAIN, firebaseInitialized } from './firebase.js';
+import { auth, db, firebaseInitialized } from './firebase.js';
 
 const checkInit = () => {
   if (!firebaseInitialized) {
@@ -19,19 +19,18 @@ export const AuthSystem = {
   currentNick: null,
   currentRoomCode: null,
 
-  generateFakeEmail(nick, roomCode) {
-    const sanitizedNick = nick.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return `${sanitizedNick}_${roomCode}@${APP_INTERNAL_DOMAIN}`;
+  generateFakeEmail(username) {
+    return `${username.toLowerCase().trim()}@mesarpg.com`;
   },
 
-  async register(nick, password, roomCode = 'global') {
+  async register(nick, password) {
     checkInit();
-    const email = this.generateFakeEmail(nick, roomCode);
-    
+    const email = this.generateFakeEmail(nick);
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    
+
     await updateProfile(userCredential.user, { displayName: nick });
-    
+
     await setDoc(doc(db, 'users', userCredential.user.uid), {
       nick,
       createdAt: serverTimestamp()
@@ -39,20 +38,32 @@ export const AuthSystem = {
 
     this.currentUser = userCredential.user;
     this.currentNick = nick;
-    
+
     return userCredential.user;
   },
 
-  async login(nick, password, roomCode = 'global') {
+  async login(username, password) {
     checkInit();
-    const email = this.generateFakeEmail(nick, roomCode);
-    
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    
-    this.currentUser = userCredential.user;
-    this.currentNick = userCredential.user.displayName || nick;
-    
-    return userCredential.user;
+    const fakeEmail = this.generateFakeEmail(username);
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, fakeEmail, password);
+      console.log("Logado com sucesso:", userCredential.user);
+
+      this.currentUser = userCredential.user;
+      this.currentNick = userCredential.user.displayName || username;
+
+      return userCredential.user;
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') {
+        alert("Usuário não encontrado!");
+      } else if (error.code === 'auth/wrong-password') {
+        alert("Senha incorreta!");
+      } else {
+        console.error("Erro ao logar:", error.message);
+      }
+      throw error; // Throwing so index.html can handle the UI state (button loading, etc)
+    }
   },
 
   async logout() {
