@@ -109,14 +109,38 @@
       window.location.href = 'index.html';
     }
 
-    // Aguarda a inicialização do Firebase antes de verificar o login
-    await AuthSystem.waitForInitialization();
+    async function init() {
+      // Aguarda a inicialização do Firebase antes de verificar o login
+      await AuthSystem.waitForInitialization();
 
-    if (!AuthSystem.isAuthenticated()) {
-      window.location.href = 'index.html';
+      if (!AuthSystem.isAuthenticated()) {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      document.getElementById('roomCode').textContent = roomCode;
+
+      RoomSystem.subscribeToRoom(roomCode, {
+        onRoomUpdate: (room) => {
+          document.getElementById('roomName').textContent = room.name;
+          document.getElementById('roomStatus').textContent = room.status === 'waiting' ? 'Aguardando' : room.status;
+          
+          if (room.status === 'playing') {
+            window.location.href = RoomSystem.isMaster ? `master.html?code=${roomCode}` : `player.html?code=${roomCode}`;
+          }
+        },
+        onPlayersUpdate: renderPlayers
+      });
+
+      ChatSystem.subscribeToChat(roomCode, renderChat);
+
+      document.getElementById('yourRole').textContent = RoomSystem.isMaster ? 'Mestre' : 'Jogador';
+      if (RoomSystem.isMaster) {
+        document.getElementById('masterActions').classList.remove('hidden');
+      }
     }
 
-    document.getElementById('roomCode').textContent = roomCode;
+    init();
 
     function renderPlayers(players) {
       const container = document.getElementById('playersList');

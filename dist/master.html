@@ -4,10 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel do Mestre - RPG Platform</title>
-  <link rel="stylesheet" href="css/base.css">
-  <link rel="stylesheet" href="css/layout.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/map.css">
   <style>
     .master-layout {
       display: grid;
@@ -413,6 +409,12 @@
       }
     }
   </style>
+  <script type="module" crossorigin src="/assets/master-B3FGukdg.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/sounds-vUoiWWks.js">
+  <link rel="modulepreload" crossorigin href="/assets/dice-DtlRVfWd.js">
+  <link rel="modulepreload" crossorigin href="/assets/battle-BMqdJid8.js">
+  <link rel="stylesheet" crossorigin href="/assets/sounds-9glUlBov.css">
+  <link rel="stylesheet" crossorigin href="/assets/battle-grDkpdPG.css">
 </head>
 <body class="page battle-mode">
   <div class="turn-indicator" id="turnIndicator"></div>
@@ -521,190 +523,5 @@
     </div>
   </main>
 
-  <script type="module">
-    import { AuthSystem } from './js/auth.js';
-    import { RoomSystem } from './js/room.js';
-    import { ChatSystem } from './js/chat.js';
-    import { DiceSystem } from './js/dice.js';
-    import { SoundManager } from './js/sounds.js';
-    import { MapSystem } from './js/map.js';
-    import { MasterSystem } from './js/master.js';
-    import { BattleSystem } from './js/battle.js';
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomCode = urlParams.get('code');
-
-    async function init() {
-      // Aguarda a inicialização do Firebase antes de verificar o login
-      await AuthSystem.waitForInitialization();
-
-      if (!roomCode || !AuthSystem.isAuthenticated()) {
-        window.location.href = 'index.html';
-        return;
-      }
-
-      await RoomSystem.joinRoom(roomCode);
-      
-      if (!RoomSystem.isMaster) {
-        window.location.href = 'lobby.html?code=' + roomCode;
-        return;
-      }
-
-      document.getElementById('masterNick').textContent = AuthSystem.currentNick;
-      document.getElementById('roomName').textContent = RoomSystem.currentRoom?.name || 'Mesa';
-
-      RoomSystem.subscribeToRoom(roomCode, {
-        onRoomUpdate: (room) => {
-          document.getElementById('battleIndicator').classList.toggle('active', room.battleMode);
-          if (room.battleMode) {
-            document.getElementById('toggleBattleBtn').textContent = '⚔️ Desativar Batalha';
-            document.getElementById('toggleBattleBtn').classList.remove('btn-success');
-            document.getElementById('toggleBattleBtn').classList.add('btn-danger');
-          }
-        },
-        onPlayersUpdate: renderPlayers
-      });
-
-      ChatSystem.subscribeToChat(roomCode, renderChat);
-      ChatSystem.subscribeToDice(roomCode, renderRollHistory);
-
-      await MapSystem.initialize('mapWrapper');
-      MapSystem.subscribeToMap();
-      
-      MasterSystem.setupNPCPanel();
-      await MasterSystem.initialize();
-      await BattleSystem.initialize();
-    }
-
-    function renderPlayers(players) {
-      const container = document.getElementById('playersList');
-      container.innerHTML = players.map(p => `
-        <div class="player-item">
-          <div class="player-avatar">${p.nick?.[0]?.toUpperCase() || '?'}</div>
-          <span class="player-name">${p.nick}</span>
-          <span class="player-status ${!p.online ? 'offline' : ''}">${p.online ? 'Online' : 'Offline'}</span>
-        </div>
-      `).join('');
-    }
-
-    function renderChat(messages) {
-      const container = document.getElementById('chatMessages');
-      container.innerHTML = messages.slice(-50).map(m => {
-        const time = new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const typeClass = m.type === 'roll' ? 'text-gold' : m.type === 'action' ? 'text-green' : m.type === 'battle' ? 'text-red' : m.type === 'system' ? 'text-purple' : '';
-        
-        if (m.type === 'roll') {
-          return `<div class="message"><span class="message-sender">${m.senderNick}</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div class="message-roll">🎲 ${m.text}</div></div>`;
-        }
-        return `<div class="message ${typeClass}"><span class="message-sender">${m.senderNick}</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div>${m.text}</div></div>`;
-      }).join('');
-      container.scrollTop = container.scrollHeight;
-    }
-
-    function renderRollHistory(rolls) {
-      const container = document.getElementById('rollHistory');
-      container.innerHTML = rolls.slice(-10).reverse().map(r => `
-        <div class="mb-sm" style="padding: 0.5rem; background: var(--color-bg-secondary); border-radius: var(--radius-sm);">
-          <strong>${r.rolledBy}</strong> <span class="text-gold">${r.dice}</span> = ${r.total}
-          ${r.context ? `<div class="text-muted" style="font-size: 0.8rem;">${r.context}</div>` : ''}
-        </div>
-      `).join('') || '<p class="text-muted" style="font-size: 0.85rem;">Nenhuma rolagem ainda</p>';
-    }
-
-    function renderTokens() {
-      const container = document.getElementById('tokensList');
-      const tokens = Object.values(MapSystem.tokens || {});
-      
-      container.innerHTML = tokens.map(t => `
-        <div class="token-item" style="
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.5rem;
-          background: var(--color-bg-secondary);
-          border-radius: var(--radius-sm);
-          border-left: 3px solid ${t.color};
-        ">
-          <span>${t.name}</span>
-          ${t.hpMax > 0 ? `<span class="text-muted" style="font-size: 0.8rem;">${t.hp}/${t.hpMax} HP</span>` : ''}
-        </div>
-      `).join('') || '<p class="text-muted" style="font-size: 0.85rem;">Nenhum token</p>';
-    }
-
-    init();
-
-    const mapWrapper = document.getElementById('mapWrapper');
-    mapWrapper.addEventListener('dragover', (e) => e.preventDefault());
-    mapWrapper.addEventListener('drop', (e) => MasterSystem.handleMapDrop(e));
-
-    async function rollDice(dice) {
-      const display = document.getElementById('diceDisplay');
-      const result = await DiceSystem.rollWithAnimation(dice, display, { animate: true });
-      display.textContent = result.total;
-      await ChatSystem.sendRoll(dice, result.results, result.total, 'Mestre');
-      SoundManager.playDiceRoll();
-      setTimeout(() => SoundManager.playDiceLand(), 300);
-    }
-
-    document.querySelectorAll('.dice-btn').forEach(btn => {
-      btn.addEventListener('click', () => rollDice(btn.dataset.dice));
-    });
-
-    document.getElementById('rollCustomBtn').addEventListener('click', () => {
-      const input = document.getElementById('customDiceInput').value.trim();
-      if (input) rollDice(input);
-    });
-
-    document.getElementById('customDiceInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        const input = e.target.value.trim();
-        if (input) rollDice(input);
-      }
-    });
-
-    document.getElementById('chatForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const text = document.getElementById('chatInput').value.trim();
-      if (text) {
-        await ChatSystem.sendMessage(text);
-        document.getElementById('chatInput').value = '';
-      }
-    });
-
-    document.getElementById('toggleBattleBtn').addEventListener('click', async () => {
-      await MasterSystem.toggleBattleMode();
-    });
-
-    document.getElementById('endSessionBtn').addEventListener('click', async () => {
-      await MasterSystem.endSession();
-    });
-
-    document.getElementById('addNpcBtn').addEventListener('click', () => {
-      MasterSystem.showAddNPCCustomModal();
-    });
-
-    document.getElementById('clearDrawingBtn').addEventListener('click', async () => {
-      if (confirm('Limpar todo o desenho do mapa?')) {
-        await MapSystem.clearDrawing();
-        SoundManager.playButtonClick();
-      }
-    });
-
-    document.getElementById('changeMapBtn').addEventListener('click', () => {
-      document.getElementById('mapFileInput').click();
-    });
-
-    setInterval(() => {
-      renderTokens();
-    }, 2000);
-
-    window.addEventListener('beforeunload', () => {
-      ChatSystem.unsubscribe();
-      MapSystem.unsubscribe();
-      MasterSystem.cleanup();
-      BattleSystem.cleanup();
-      RoomSystem.cleanup();
-    });
-  </script>
 </body>
 </html>

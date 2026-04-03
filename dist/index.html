@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPG Platform - Mesa Virtual</title>
+  <script type="module" crossorigin src="/assets/main-Bcypk1P-.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/sounds-vUoiWWks.js">
+  <link rel="stylesheet" crossorigin href="/assets/sounds-9glUlBov.css">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo">🏰</div>
+        <h1 class="login-title">RPG Platform</h1>
+        <p class="login-subtitle">Sua mesa virtual de RPG</p>
+      </div>
+
+      <div class="login-tabs">
+        <button class="login-tab active" data-tab="login">Entrar</button>
+        <button class="login-tab" data-tab="create">Criar Mesa</button>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <div class="input-group">
+          <label class="input-label" for="nick">Apelido</label>
+          <input type="text" id="nick" class="input" placeholder="Seu nome na mesa" required minlength="2" maxlength="20">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="password">Senha</label>
+          <input type="password" id="password" class="input" placeholder="Sua senha" required minlength="4">
+        </div>
+
+        <div id="roomCodeGroup" class="input-group">
+          <label class="input-label" for="roomCode">Código da Mesa</label>
+          <input type="text" id="roomCode" class="input" placeholder="ABCDE" maxlength="5" style="text-transform: uppercase; text-align: center; letter-spacing: 0.2em;">
+        </div>
+
+        <div id="roomNameGroup" class="input-group hidden">
+          <label class="input-label" for="roomName">Nome da Mesa <small id="roomNameHint" class="text-muted">(obrigatório)</small></label>
+          <input type="text" id="roomName" class="input" placeholder="A Maldição do Castelo">
+        </div>
+
+        <div id="loginError" class="error-message hidden"></div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+          <span id="submitText">Entrar na Mesa</span>
+          <span id="submitLoader" class="loading-spinner hidden"></span>
+        </button>
+      </form>
+
+      <div class="divider"></div>
+
+      <p class="text-center text-muted" style="font-size: 0.85rem;">
+        Pode usar qualquer apelido e senha para criar sua conta.
+      </p>
+    </div>
+  </div>
+
+</body>
+</html>
