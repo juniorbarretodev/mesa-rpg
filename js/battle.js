@@ -26,7 +26,7 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
 
-    const sheetsRef = collection(db, 'sheets', code);
+    const sheetsRef = collection(db, 'sheets', code, 'players');
     const snap = await getDocs(sheetsRef);
     
     snap.forEach(doc => {
@@ -147,7 +147,7 @@ export const BattleSystem = {
       }
     });
 
-    const sheetsRef = collection(db, 'sheets', code);
+    const sheetsRef = collection(db, 'sheets', code, 'players');
     const snap = await getDocs(sheetsRef);
     
     snap.forEach(doc => {
