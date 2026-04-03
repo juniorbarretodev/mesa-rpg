@@ -109,6 +109,9 @@
       window.location.href = 'index.html';
     }
 
+    // Aguarda a inicialização do Firebase antes de verificar o login
+    await AuthSystem.waitForInitialization();
+
     if (!AuthSystem.isAuthenticated()) {
       window.location.href = 'index.html';
     }

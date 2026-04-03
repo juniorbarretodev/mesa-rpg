@@ -19,6 +19,17 @@ export const AuthSystem = {
   currentNick: null,
   currentRoomCode: null,
 
+  waitForInitialization() {
+    return new Promise((resolve) => {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        this.currentUser = user;
+        this.currentNick = user?.displayName || null;
+        unsubscribe();
+        resolve(user);
+      });
+    });
+  },
+
   generateFakeEmail(username) {
     return `${username.toLowerCase().trim()}@mesarpg.com`;
   },

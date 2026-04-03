@@ -538,6 +538,9 @@
     const urlParams = new URLSearchParams(window.location.search);
     const roomCode = urlParams.get('code');
 
+    // Aguarda a inicialização do Firebase antes de verificar o login
+    await AuthSystem.waitForInitialization();
+
     if (!roomCode || !AuthSystem.isAuthenticated()) {
       window.location.href = 'index.html';
     }
