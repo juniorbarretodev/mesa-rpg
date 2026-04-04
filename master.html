@@ -462,8 +462,20 @@
           </div>
 
           <div class="panel">
+            <h3 class="panel-title">🗺️ Mapa</h3>
+            <div class="flex gap-sm mb-sm">
+              <button class="btn btn-secondary btn-sm" id="loadMapBtn">🗺 Carregar Mapa</button>
+              <button class="btn btn-secondary btn-sm" id="toggleGridBtn">🔲 Grid</button>
+            </div>
+          </div>
+
+          <div class="panel">
             <h3 class="panel-title">⚔️ NPCs</h3>
-            <button class="btn btn-secondary btn-block mb-sm" id="addNpcBtn">+ Adicionar NPC</button>
+            <div class="flex gap-sm mb-sm">
+              <button class="btn btn-danger btn-sm" id="addHostileBtn">+ Hostil</button>
+              <button class="btn btn-warning btn-sm" id="addNeutralBtn">+ Neutro</button>
+              <button class="btn btn-success btn-sm" id="addFriendlyBtn">+ Amigável</button>
+            </div>
             <div id="npcList" class="tokens-panel"></div>
           </div>
         </aside>
@@ -503,7 +515,6 @@
             <h3 class="panel-title">🖌️ Ferramentas</h3>
             <div class="flex flex-col gap-sm">
               <button class="btn btn-secondary btn-block" id="clearDrawingBtn">🗑️ Limpar Desenho</button>
-              <button class="btn btn-secondary btn-block" id="changeMapBtn">🗺️ Trocar Mapa</button>
             </div>
           </div>
         </aside>
@@ -693,8 +704,36 @@
       await MasterSystem.endSession();
     });
 
-    document.getElementById('addNpcBtn').addEventListener('click', () => {
-      MasterSystem.showAddNPCCustomModal();
+    document.getElementById('addHostileBtn').addEventListener('click', () => {
+      MasterSystem.showAddNPCTypedModal('hostile');
+    });
+
+    document.getElementById('addNeutralBtn').addEventListener('click', () => {
+      MasterSystem.showAddNPCTypedModal('neutral');
+    });
+
+    document.getElementById('addFriendlyBtn').addEventListener('click', () => {
+      MasterSystem.showAddNPCTypedModal('friendly');
+    });
+
+    document.getElementById('loadMapBtn').addEventListener('click', () => {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.style.display = 'none';
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          MapSystem.uploadMapImage(file);
+        }
+      });
+      document.body.appendChild(fileInput);
+      fileInput.click();
+      fileInput.remove();
+    });
+
+    document.getElementById('toggleGridBtn').addEventListener('click', () => {
+      MapSystem.toggleGrid();
     });
 
     document.getElementById('clearDrawingBtn').addEventListener('click', async () => {
@@ -702,10 +741,6 @@
         await MapSystem.clearDrawing();
         SoundManager.playButtonClick();
       }
-    });
-
-    document.getElementById('changeMapBtn').addEventListener('click', () => {
-      document.getElementById('mapFileInput').click();
     });
 
     setInterval(() => {

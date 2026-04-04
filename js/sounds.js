@@ -17,27 +17,10 @@ export const SoundManager = {
   },
 
   async preload() {
-    const soundFiles = [
-      'sounds/dice/roll.wav',
-      'sounds/dice/land.wav',
-      'sounds/combat/sword_hit.wav',
-      'sounds/combat/magic_cast.wav',
-      'sounds/combat/death_enemy.wav',
-      'sounds/combat/death_monster.wav',
-      'sounds/combat/death_hero.wav',
-      'sounds/ui/button_click.wav',
-      'sounds/ui/notification.wav',
-      'sounds/ui/battle_start.wav'
-    ];
-
-    for (const file of soundFiles) {
-      try {
-        const audio = new Audio(file);
-        audio.preload = 'auto';
-        const key = file.replace(/sounds\//, '').replace('.wav', '').replace(/\//g, '_');
-        this.sounds[key] = audio;
-      } catch (e) { }
-    }
+    // Sons ZapSplat ainda não adicionados
+    // Adicionar arquivos .wav em /sounds/ quando disponíveis
+    // Por enquanto, retornar silenciosamente para evitar erros 404
+    return;
   },
 
   play(soundKey, options = {}) {

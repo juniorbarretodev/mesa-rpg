@@ -146,6 +146,72 @@
       color: var(--color-text-secondary);
     }
 
+    .grimoire-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .grimoire-card {
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 0.75rem;
+      border-left: 3px solid var(--color-accent-gold);
+    }
+
+    .grimoire-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.5rem;
+    }
+
+    .grimoire-card-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .grimoire-card-type {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      background: var(--color-bg-tertiary);
+    }
+
+    .grimoire-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .grimoire-tag {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.35rem;
+      border-radius: 3px;
+      background: rgba(212, 175, 55, 0.2);
+      color: var(--color-accent-gold);
+    }
+
+    .grimoire-tag.dano { background: rgba(220, 38, 38, 0.2); color: #ef4444; }
+    .grimoire-tag.cura { background: rgba(22, 163, 74, 0.2); color: #22c55e; }
+    .grimoire-tag.controle { background: rgba(147, 51, 234, 0.2); color: #a855f7; }
+    .grimoire-tag.suporte { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+    .grimoire-tag.truque { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+    .grimoire-tag.passiva { background: rgba(212, 175, 55, 0.2); color: #fbbf24; }
+
+    .grimoire-desc {
+      font-size: 0.8rem;
+      color: var(--color-text-secondary);
+      margin-bottom: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .grimoire-use-btn {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+    }
+
     .map-viewer {
       background: var(--color-bg-card);
       border-radius: var(--radius-lg);
@@ -471,39 +537,21 @@
               </div>
             </div>
 
-            <div class="resource-bar">
-              <div class="resource-label">
-                <span>💧 Mana</span>
-                <span id="manaText">0 / 0</span>
-              </div>
-              <div class="bar-container">
-                <div class="bar-fill mana" id="manaBar" style="width: 0%"></div>
-              </div>
-            </div>
-
-            <div class="resource-bar">
-              <div class="resource-label">
-                <span>⚡ Estamina</span>
-                <span id="staminaText">0 / 0</span>
-              </div>
-              <div class="bar-container">
-                <div class="bar-fill stamina" id="staminaBar" style="width: 0%"></div>
-              </div>
-            </div>
-
             <div class="status-badges" id="statusBadges"></div>
-          </div>
+            </div>
 
           <div class="tabs">
-            <button class="tab active" data-tab="attacks">⚔️ Ataques</button>
-            <button class="tab" data-tab="spells">✨ Magias</button>
+            <button class="tab active" data-tab="general">👤 Geral</button>
+            <button class="tab" data-tab="abilities">⚔️ Habilidades</button>
+            <button class="tab" data-tab="grimoire">📖 Grimório</button>
             <button class="tab" data-tab="items">🎒 Itens</button>
           </div>
 
           <div class="sheet-section">
-            <div id="attacksList" class="ability-list"></div>
-            <div id="spellsList" class="ability-list hidden"></div>
-            <div id="itemsList" class="ability-list hidden"></div>
+            <div id="generalTab" class="tab-content"></div>
+            <div id="abilitiesTab" class="tab-content hidden"></div>
+            <div id="grimoireTab" class="tab-content hidden"></div>
+            <div id="itemsTab" class="tab-content hidden"></div>
           </div>
         </aside>
 
@@ -603,6 +651,78 @@
 
     init();
 
+    const GRIMORIO = {
+      "Guerreiro": {
+        color: "#c04040",
+        abilities: [
+          { name: "Segunda Oportunidade", type: "Utilidade", desc: "Quando errar um ataque, pode usar reação para fazer outro ataque contra o mesmo alvo. Recarrega no início do turno. (Luta Defensiva)", tags: ["Reação"] },
+          { name: "Ação Extra", type: "Passiva", desc: "Pode atacar duas vezes quando usar a ação Atacar.", tags: ["Passiva"] },
+          { name: "Surto de Ação", type: "Ativa", desc: "Uma vez por descanso curto: faz uma ação adicional no turno.", tags: ["1/descanso"] },
+          { name: "Estilo: Luta Defensiva", type: "Passiva", desc: "+1 CA enquanto usa armadura.", tags: ["Passiva"] }
+        ]
+      },
+      "Bardo": {
+        color: "#c06080",
+        abilities: [
+          { name: "Inspiração Bárdica", type: "Suporte", desc: "Ação bônus: concede 1d6 de Inspiração a um aliado. Pode ser usado em ataque, teste ou resistência. Usos = Mod Carisma por descanso longo.", tags: ["Ação Bônus"] },
+          { name: "Zombaria Malévola", type: "Truque", desc: "Insulta uma criatura. Sabedoria CD 14. Se falhar: 1d4 dano psíquico e desvantagem no próximo ataque. Alcance 18m.", tags: ["Dano", "Truque"] },
+          { name: "Ilusão Menor", type: "Truque", desc: "Cria som ou imagem ilusória. Investigação CD 14 para detectar. Duração 1 minuto. Alcance 9m.", tags: ["Ilusão", "Truque"] },
+          { name: "Sono", type: "Controle", desc: "Rola 5d8. Total indica PV de criaturas que adormecem (menor PV primeiro). Não afeta mortos-vivos. Alcance 27m, área esfera 6m.", tags: ["Controle", "Nv1"] },
+          { name: "Sugestão", type: "Controle", desc: "Sugere ação a criatura. Sabedoria CD 14. Se falhar: segue sugestão por até 8h. Alcance 9m.", tags: ["Controle", "Nv2"] },
+          { name: "Imobilizar Pessoa", type: "Controle", desc: "Paralisa humanoide. Sabedoria CD 14 por turno. Ataques contra ela têm vantagem. Alcance 18m.", tags: ["Controle", "Nv2"] }
+        ]
+      },
+      "Feiticeiro": {
+        color: "#8060c0",
+        abilities: [
+          { name: "Toque Gelado", type: "Truque", desc: "Alcance 36m. 1d8 dano necrótico. Alvo não pode recuperar PV até próximo turno. Mortos-vivos têm desvantagem no ataque.", tags: ["Dano", "Truque"] },
+          { name: "Bola de Fogo", type: "Dano", desc: "Explosão numa área de 6m de raio. 8d6 de dano de fogo. Destreza CD 15 para metade. Alcance 45m.", tags: ["Dano", "Nv3"] },
+          { name: "Raio", type: "Dano", desc: "8d6 de dano de raio. Linha de 30m de comprimento e 1,5m de largura. Destreza CD 15 para metade.", tags: ["Dano", "Nv3"] },
+          { name: "Metamagia: Magia Sutil", type: "Passiva", desc: "Lança magias sem componentes verbais ou somáticos. Custo: 1 ponto de feitiçaria.", tags: ["Passiva"] },
+          { name: "Metamagia: Magia Gêmea", type: "Ativa", desc: "Aplica magia de alvo único em dois alvos. Custo: nível da magia em pontos.", tags: ["Ativa"] }
+        ]
+      },
+      "Ladino": {
+        color: "#40a060",
+        abilities: [
+          { name: "Ataque Furtivo", type: "Dano", desc: "Uma vez por turno, +3d6 de dano se tiver vantagem no ataque ou aliado adjacente ao alvo (sem desvantagem).", tags: ["Dano", "Passiva"] },
+          { name: "Ação Ardilosa", type: "Ativa", desc: "Ação bônus: Disparada, Desengajar ou Esconder.", tags: ["Ação Bônus"] },
+          { name: "Sentidos Aguçados", type: "Passiva", desc: "Vantagem em testes de Percepção baseados em visão.", tags: ["Passiva"] },
+          { name: "Esquiva Sobrenatural", type: "Reação", desc: "Reação: quando receber dano de ataque visível, reduzir pela metade.", tags: ["Reação"] }
+        ]
+      },
+      "Clérigo": {
+        color: "#40a0c0",
+        abilities: [
+          { name: "Palavra de Cura", type: "Cura", desc: "Ação bônus. Alcance 18m. Cura 1d4 + Mod Sabedoria. Nível 1.", tags: ["Cura", "Ação Bônus"] },
+          { name: "Cura Ferimentos", type: "Cura", desc: "Alcance toque. Cura 1d8 + Mod Sabedoria. Nível 1.", tags: ["Cura", "Nv1"] },
+          { name: "Sagrado Flamejante", type: "Dano", desc: "Truque. Alcance 18m. 1d8 dano radiante. Alvo não pode ficar invisível até próximo turno.", tags: ["Dano", "Truque"] },
+          { name: "Escudo da Fé", type: "Suporte", desc: "+2 CA a uma criatura. Concentração, 10 min. Alcance 18m. Ação bônus.", tags: ["Suporte", "Nv1"] },
+          { name: "Bênção", type: "Suporte", desc: "Até 3 criaturas adicionam 1d4 em ataques e testes de resistência. Concentração, 1 min.", tags: ["Suporte", "Nv1"] }
+        ]
+      },
+      "Paladino": {
+        color: "#c09020",
+        abilities: [
+          { name: "Golpe Divino", type: "Dano", desc: "Smite: gasta slot de magia após acertar ataque. Causa +2d8 dano radiante por nível do slot (max 5d8). +1d8 extra contra mortos-vivos.", tags: ["Dano", "Reação"] },
+          { name: "Cura pelas Mãos", type: "Cura", desc: "Pool de cura = 5 × nível. Ação: restaura PV tocando criatura. Pode curar doenças/venenos (5 PV do pool cada).", tags: ["Cura", "Ativo"] },
+          { name: "Aura de Proteção", type: "Passiva", desc: "Aliados em 3m adicionam Mod Carisma em testes de resistência.", tags: ["Passiva", "Aura"] },
+          { name: "Escudo da Fé", type: "Suporte", desc: "+2 CA a uma criatura. Concentração, 10 min.", tags: ["Suporte", "Nv1"] },
+          { name: "Bênção", type: "Suporte", desc: "Até 3 criaturas adicionam 1d4 em ataques e resistências. Concentração, 1 min.", tags: ["Suporte", "Nv1"] }
+        ]
+      },
+      "Bruxo": {
+        color: "#c8a040",
+        abilities: [
+          { name: "Toque do Túmulo", type: "Truque", desc: "Alcance toque. 1d8 necrótico. Alvo não recupera PV até próximo turno.", tags: ["Dano", "Truque"] },
+          { name: "Explosão Eldritch", type: "Truque", desc: "Alcance 36m. 1d10 de dano de força.", tags: ["Dano", "Truque"] },
+          { name: "Armadura Amaldiçoada", type: "Ativa", desc: "Maldição um alvo: +1d6 necrótico em cada acerto. Desvantagem em testes do atributo escolhido. Alcance 27m.", tags: ["Controle", "Nv1"] },
+          { name: "Praga", type: "Controle", desc: "Amaldiçoa criatura. Desvantagem em testes do atributo escolhido. +1d6 necrótico extra em cada acerto. Alcance 27m. Concentração 1h.", tags: ["Controle", "Nv1"] },
+          { name: "Mente Desperta", type: "Especial", desc: "Comunicação telepática com criaturas visíveis até 9m. Não precisa compartilhar idioma. Uso ilimitado.", tags: ["Especial"] }
+        ]
+      }
+    };
+
     function renderSheet(sheet) {
       if (!sheet) return;
 
@@ -616,45 +736,65 @@
       safe('hpText') && (safe('hpText').textContent = `${sheet.hp} / ${sheet.hpMax}`);
       safe('hpBar') && (safe('hpBar').style.width = `${(sheet.hp / sheet.hpMax) * 100}%`);
 
-      const mana = sheet.resources?.mana || 0;
-      const manaMax = sheet.resources?.manaMax || sheet.resources?.mana || 0;
-      safe('manaText') && (safe('manaText').textContent = `${mana} / ${manaMax}`);
-      safe('manaBar') && (safe('manaBar').style.width = `${manaMax > 0 ? (mana / manaMax) * 100 : 0}%`);
-
-      const stamina = sheet.resources?.stamina || 0;
-      const staminaMax = sheet.resources?.staminaMax || sheet.resources?.stamina || 0;
-      safe('staminaText') && (safe('staminaText').textContent = `${stamina} / ${staminaMax}`);
-      safe('staminaBar') && (safe('staminaBar').style.width = `${staminaMax > 0 ? (stamina / staminaMax) * 100 : 0}%`);
-
       const statusContainer = document.getElementById('statusBadges');
       statusContainer.innerHTML = (sheet.status || []).map(s =>
         `<span class="status-badge ${s.startsWith('+') ? 'buff' : ''}">${s}</span>`
       ).join('');
 
-      const attacksContainer = document.getElementById('attacksList');
-      attacksContainer.innerHTML = (sheet.attacks || []).map(a => `
-        <div class="ability-item" data-ability="${a.name}" data-type="attack">
+      const generalTab = document.getElementById('generalTab');
+      generalTab.innerHTML = `
+        <div style="display: flex; gap: 1rem; align-items: center;">
+          <div class="avatar" style="width: 80px; height: 80px; font-size: 2rem;">${sheet.name?.[0]?.toUpperCase() || '?'}</div>
+          <div>
+            <h3 style="margin: 0 0 0.25rem 0;">${sheet.name || 'Sem nome'}</h3>
+            <p style="margin: 0; color: var(--color-text-secondary);">${sheet.class || 'Aventureiro'} — Nível ${sheet.level || 1}</p>
+          </div>
+        </div>
+      `;
+
+      const abilitiesTab = document.getElementById('abilitiesTab');
+      const allAbilities = [...(sheet.attacks || []), ...(sheet.spells || [])];
+      abilitiesTab.innerHTML = allAbilities.length ? allAbilities.map(a => `
+        <div class="ability-item" data-ability="${a.name}" data-type="${sheet.attacks?.includes(a) ? 'attack' : 'spell'}">
           <div>
             <div class="ability-name">${a.name}</div>
-            <div class="ability-cost">${a.description || 'Ataque básico'}</div>
+            <div class="ability-cost">${a.description || 'Ação padrão'}</div>
           </div>
           <div class="ability-dice">${a.dice}${a.bonus ? ' +' + a.bonus : ''}</div>
         </div>
-      `).join('') || '<p class="text-muted">Nenhum ataque cadastrado</p>';
+      `).join('') : '<p class="text-muted">Nenhuma habilidade cadastrada</p>';
 
-      const spellsContainer = document.getElementById('spellsList');
-      spellsContainer.innerHTML = (sheet.spells || []).map(s => `
-        <div class="ability-item" data-ability="${s.name}" data-type="spell">
-          <div>
-            <div class="ability-name">${s.name}</div>
-            <div class="ability-cost">${s.manaCost ? `💧 ${s.manaCost}` : ''} ${s.range ? `📏 ${s.range}` : ''}</div>
-          </div>
-          <div class="ability-dice">${s.dice}</div>
+      const grimoireTab = document.getElementById('grimoireTab');
+      const charClass = sheet.class || 'Guerreiro';
+      const grimoireData = GRIMORIO[charClass] || GRIMORIO["Guerreiro"];
+      grimoireTab.innerHTML = `
+        <div class="grimoire-cards">
+          ${(grimoireData.abilities || []).map(ability => `
+            <div class="grimoire-card" style="border-left-color: ${grimoireData.color};">
+              <div class="grimoire-card-header">
+                <span class="grimoire-card-title">${ability.name}</span>
+                <span class="grimoire-card-type">${ability.type}</span>
+              </div>
+              <div class="grimoire-tags">
+                ${(ability.tags || []).map(tag => {
+                  const tagClass = tag.toLowerCase().includes('dano') ? 'dano' :
+                    tag.toLowerCase().includes('cura') ? 'cura' :
+                    tag.toLowerCase().includes('controle') ? 'controle' :
+                    tag.toLowerCase().includes('suporte') ? 'suporte' :
+                    tag.toLowerCase().includes('truque') ? 'truque' :
+                    tag.toLowerCase().includes('passiva') ? 'passiva' : '';
+                  return `<span class="grimoire-tag ${tagClass}">${tag}</span>`;
+                }).join('')}
+              </div>
+              <div class="grimoire-desc">${ability.desc}</div>
+              <button class="btn btn-primary btn-sm grimoire-use-btn" onclick="PlayerActions.useGrimoireAbility('${ability.name}', '${charClass}')">Usar no Chat</button>
+            </div>
+          `).join('')}
         </div>
-      `).join('') || '<p class="text-muted">Nenhuma magia cadastrada</p>';
+      `;
 
-      const itemsContainer = document.getElementById('itemsList');
-      itemsContainer.innerHTML = (sheet.items || []).map(i => `
+      const itemsTab = document.getElementById('itemsTab');
+      itemsTab.innerHTML = (sheet.items || []).map(i => `
         <div class="ability-item" data-item="${i.name}">
           <div>
             <div class="ability-name">${i.name}</div>
@@ -777,10 +917,11 @@
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
 
-        document.getElementById('attacksList').classList.add('hidden');
-        document.getElementById('spellsList').classList.add('hidden');
-        document.getElementById('itemsList').classList.add('hidden');
-        document.getElementById(`${tab.dataset.tab}List`).classList.remove('hidden');
+        document.getElementById('generalTab').classList.add('hidden');
+        document.getElementById('abilitiesTab').classList.add('hidden');
+        document.getElementById('grimoireTab').classList.add('hidden');
+        document.getElementById('itemsTab').classList.add('hidden');
+        document.getElementById(`${tab.dataset.tab}Tab`).classList.remove('hidden');
 
         SoundManager.playButtonClick();
       });
@@ -843,6 +984,19 @@
         }
 
         await SheetSystem.removeItem(itemId);
+      },
+
+      async useGrimoireAbility(abilityName, charClass) {
+        const grimoireData = GRIMORIO[charClass] || GRIMORIO["Guerreiro"];
+        const ability = grimoireData.abilities?.find(a => a.name === abilityName);
+        
+        await ChatSystem.sendMessage(`usa **${abilityName}** do Grimório!`);
+        
+        if (ability) {
+          document.getElementById('diceResult').textContent = ability.desc;
+        }
+        
+        SoundManager.playButtonClick();
       }
     };
 

@@ -20,7 +20,10 @@ export const MapSystem = {
   listeners: [],
   drawingCanvas: null,
   drawingCtx: null,
+  gridCanvas: null,
+  gridCtx: null,
   isDrawing: false,
+  gridVisible: false,
 
   async initialize(containerId, options = {}) {
     const container = document.getElementById(containerId);
@@ -29,6 +32,7 @@ export const MapSystem = {
     container.innerHTML = `
       <div class="map-wrapper">
         <img id="mapImage" class="map-image" style="display: none;">
+        <canvas id="mapGridCanvas" class="map-grid-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
         <canvas id="mapDrawingCanvas" class="map-drawing-canvas"></canvas>
         <div id="tokensLayer" class="tokens-layer"></div>
         <div class="map-drop-zone" id="mapDropZone">
@@ -43,8 +47,10 @@ export const MapSystem = {
     const fileInput = container.querySelector('#mapFileInput');
     const mapImage = container.querySelector('#mapImage');
     const drawingCanvas = container.querySelector('#mapDrawingCanvas');
+    const gridCanvas = container.querySelector('#mapGridCanvas');
 
     this.drawingCanvas = drawingCanvas;
+    this.gridCanvas = gridCanvas;
 
     const setupCanvas = () => {
       const wrapper = container.querySelector('.map-wrapper');
@@ -52,11 +58,14 @@ export const MapSystem = {
       drawingCanvas.height = wrapper.offsetHeight;
       this.drawingCtx = drawingCanvas.getContext('2d');
       this.loadDrawingData();
+      
+      gridCanvas.width = wrapper.offsetWidth;
+      gridCanvas.height = wrapper.offsetHeight;
+      this.gridCtx = gridCanvas.getContext('2d');
+      this.renderGrid();
     };
 
     if (RoomSystem.isMaster) {
-      dropZone.addEventListener('click', () => fileInput.click());
-      
       dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('drag-over');
@@ -299,6 +308,42 @@ export const MapSystem = {
     }
     this.drawingData = null;
     await this.saveMapData({ drawing: null });
+  },
+
+  renderGrid() {
+    if (!this.gridCtx || !this.gridCanvas) return;
+    
+    const ctx = this.gridCtx;
+    const width = this.gridCanvas.width;
+    const height = this.gridCanvas.height;
+    const cellSize = Math.min(width, height) / 20;
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    if (!this.gridVisible) return;
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    
+    for (let x = 0; x <= 20; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * cellSize, 0);
+      ctx.lineTo(x * cellSize, height);
+      ctx.stroke();
+    }
+    
+    for (let y = 0; y <= 20; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * cellSize);
+      ctx.lineTo(width, y * cellSize);
+      ctx.stroke();
+    }
+  },
+
+  toggleGrid() {
+    this.gridVisible = !this.gridVisible;
+    this.renderGrid();
+    return this.gridVisible;
   },
 
   async addToken(tokenData) {
