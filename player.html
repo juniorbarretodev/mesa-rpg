@@ -606,22 +606,25 @@
     function renderSheet(sheet) {
       if (!sheet) return;
 
-      document.getElementById('charAvatar').textContent = sheet.name?.[0]?.toUpperCase() || '?';
-      document.getElementById('charName').textContent = sheet.name;
-      document.getElementById('charClass').textContent = `${sheet.class} Nv. ${sheet.level}`;
+      // Verificação se elementos existem antes de manipular
+      const safe = (id) => document.getElementById(id);
 
-      document.getElementById('hpText').textContent = `${sheet.hp} / ${sheet.hpMax}`;
-      document.getElementById('hpBar').style.width = `${(sheet.hp / sheet.hpMax) * 100}%`;
+      safe('charAvatar') && (safe('charAvatar').textContent = sheet.name?.[0]?.toUpperCase() || '?');
+      safe('charName') && (safe('charName').textContent = sheet.name);
+      safe('charClass') && (safe('charClass').textContent = `${sheet.class} Nv. ${sheet.level}`);
+
+      safe('hpText') && (safe('hpText').textContent = `${sheet.hp} / ${sheet.hpMax}`);
+      safe('hpBar') && (safe('hpBar').style.width = `${(sheet.hp / sheet.hpMax) * 100}%`);
 
       const mana = sheet.resources?.mana || 0;
       const manaMax = sheet.resources?.manaMax || sheet.resources?.mana || 0;
-      document.getElementById('manaText').textContent = `${mana} / ${manaMax}`;
-      document.getElementById('manaBar').style.width = `${manaMax > 0 ? (mana / manaMax) * 100 : 0}%`;
+      safe('manaText') && (safe('manaText').textContent = `${mana} / ${manaMax}`);
+      safe('manaBar') && (safe('manaBar').style.width = `${manaMax > 0 ? (mana / manaMax) * 100 : 0}%`);
 
       const stamina = sheet.resources?.stamina || 0;
       const staminaMax = sheet.resources?.staminaMax || sheet.resources?.stamina || 0;
-      document.getElementById('staminaText').textContent = `${stamina} / ${staminaMax}`;
-      document.getElementById('staminaBar').style.width = `${staminaMax > 0 ? (stamina / staminaMax) * 100 : 0}%`;
+      safe('staminaText') && (safe('staminaText').textContent = `${stamina} / ${staminaMax}`);
+      safe('staminaBar') && (safe('staminaBar').style.width = `${staminaMax > 0 ? (stamina / staminaMax) * 100 : 0}%`);
 
       const statusContainer = document.getElementById('statusBadges');
       statusContainer.innerHTML = (sheet.status || []).map(s =>
@@ -759,8 +762,14 @@
     }
 
     setInterval(() => {
-      updateMapDisplay();
-      updateBattleDisplay(BattleSystem.battleState);
+      try {
+        if (document.getElementById('tokensLayer')) {
+          updateMapDisplay();
+        }
+        if (document.getElementById('battleIndicator')) {
+          updateBattleDisplay(BattleSystem.battleState);
+        }
+      } catch (e) { }
     }, 1000);
 
     document.querySelectorAll('.tab').forEach(tab => {
