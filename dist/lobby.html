@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sala de Espera - RPG Platform</title>
-  <script type="module" crossorigin src="/assets/lobby-CxVshQCh.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/sounds-gK9Dals0.js">
-  <link rel="modulepreload" crossorigin href="/assets/dice-CtbpK7_c.js">
-  <link rel="stylesheet" crossorigin href="/assets/sounds-9glUlBov.css">
+  <script type="module" crossorigin src="/assets/lobby-CIY-HoSq.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/sounds-DvokLOTz.js">
+  <link rel="modulepreload" crossorigin href="/assets/dice-B1K2oSAH.js">
+  <link rel="stylesheet" crossorigin href="/assets/sounds-Cb40SYvq.css">
 </head>
 <body class="page">
   <header class="main-header" style="background: var(--color-bg-secondary); padding: 1rem 0; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
@@ -55,6 +55,17 @@
         </div>
 
         <div class="lobby-sidebar">
+          <div class="panel" id="userProfileShort" style="margin-bottom: 20px;">
+            <h3 class="panel-title mb-md">👤 Seu Perfil</h3>
+            <div class="flex items-center gap-md">
+              <div class="player-avatar" id="yourAvatar" style="width: 50px; height: 50px;">?</div>
+              <div class="flex flex-col">
+                <strong id="yourNick" style="display: block;">Carregando...</strong>
+                <a href="profile.html" class="text-muted" style="font-size: 0.75rem;">Editar Perfil</a>
+              </div>
+            </div>
+          </div>
+
           <div id="masterActions" class="panel hidden">
             <h3 class="panel-title mb-md">🎭 Ações do Mestre</h3>
             <button class="btn btn-success btn-block mb-sm" id="startSessionBtn">

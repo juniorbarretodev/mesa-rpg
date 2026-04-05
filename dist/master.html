@@ -234,6 +234,9 @@
       background: rgba(212, 175, 55, 0.2) !important;
     }
 
+    #mapDropZone { cursor: default; pointer-events: none; }
+    #mapDropZone canvas, #mapDropZone .map-token { pointer-events: all; }
+
     .master-sheet-card {
       background: var(--color-bg-secondary);
       border-radius: var(--radius-md);
@@ -409,11 +412,11 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/master-BTyT7LWi.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/sounds-gK9Dals0.js">
-  <link rel="modulepreload" crossorigin href="/assets/dice-CtbpK7_c.js">
-  <link rel="modulepreload" crossorigin href="/assets/battle-pCgxGZs_.js">
-  <link rel="stylesheet" crossorigin href="/assets/sounds-9glUlBov.css">
+  <script type="module" crossorigin src="/assets/master-DkBOQRUn.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/sounds-DvokLOTz.js">
+  <link rel="modulepreload" crossorigin href="/assets/dice-B1K2oSAH.js">
+  <link rel="modulepreload" crossorigin href="/assets/battle-E3W_S5g0.js">
+  <link rel="stylesheet" crossorigin href="/assets/sounds-Cb40SYvq.css">
   <link rel="stylesheet" crossorigin href="/assets/battle-grDkpdPG.css">
 </head>
 <body class="page battle-mode">
@@ -464,25 +467,30 @@
           </div>
 
           <div class="panel">
+            <h3 class="panel-title">🗺️ Mapa</h3>
+            <div class="flex gap-sm mb-sm">
+              <button class="btn btn-secondary btn-sm" id="loadMapBtn">🗺 Carregar Mapa</button>
+              <button class="btn btn-secondary btn-sm" id="toggleGridBtn">🔲 Grid</button>
+            </div>
+          </div>
+
+          <div class="panel">
             <h3 class="panel-title">⚔️ NPCs</h3>
-            <button class="btn btn-secondary btn-block mb-sm" id="addNpcBtn">+ Adicionar NPC</button>
-            <div id="npcList" class="tokens-panel"></div>
+            <div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn btn-sm" style="background:#dc2626;color:white;border:none;"
+                onclick="MasterSystem.openNpcModal('hostile')">+ Hostil</button>
+              <button class="btn btn-sm" style="background:#ca8a04;color:white;border:none;"
+                onclick="MasterSystem.openNpcModal('neutral')">+ Neutro</button>
+              <button class="btn btn-sm" style="background:#16a34a;color:white;border:none;"
+                onclick="MasterSystem.openNpcModal('friendly')">+ Amigável</button>
+            </div>
+            <div id="npcCardsContainer" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0;min-height:40px;"></div>
           </div>
         </aside>
 
         <section class="main-area">
-          <div class="map-container" id="mapContainer">
-            <div id="mapWrapper" class="map-wrapper">
-              <img id="mapImage" class="map-image" style="display: none;">
-              <canvas id="mapDrawingCanvas" class="map-drawing-canvas"></canvas>
-              <div id="tokensLayer" class="tokens-layer"></div>
-              <div class="map-drop-zone" id="mapDropZone">
-                <p style="font-size: 3rem; margin: 0;">🗺️</p>
-                <p>Arraste uma imagem de mapa aqui</p>
-                <p class="text-muted" style="font-size: 0.85rem;">ou clique para selecionar</p>
-              </div>
-              <input type="file" id="mapFileInput" accept="image/*" style="display: none;">
-            </div>
+          <div id="mapContainer" style="height: 100%; border-radius: var(--radius-lg); overflow: hidden;">
+            <!-- O MapSystem irá preencher o HTML aqui automaticamente -->
           </div>
 
           <div class="panel mt-md chat-container">
@@ -513,9 +521,33 @@
 
           <div class="panel">
             <h3 class="panel-title">🖌️ Ferramentas</h3>
-            <div class="flex flex-col gap-sm">
-              <button class="btn btn-secondary btn-block" id="clearDrawingBtn">🗑️ Limpar Desenho</button>
-              <button class="btn btn-secondary btn-block" id="changeMapBtn">🗺️ Trocar Mapa</button>
+            <div id="drawToolbar" style="display:flex;align-items:center;gap:6px;padding:6px;
+              background:#1a1208;border:1px solid #8a6a1a;border-radius:4px;flex-wrap:wrap;">
+              <span style="font-family:'Cinzel',serif;font-size:0.5rem;color:#8a6a1a;letter-spacing:1px;">DESENHO</span>
+
+              <button id="btnPen" onclick="DrawSystem.setTool('pen')"
+                title="Caneta"
+                style="width:30px;height:30px;background:#1a1208;border:1px solid #8a6a1a;
+                  color:#c9a84c;border-radius:4px;cursor:pointer;font-size:1rem;">✏️</button>
+
+              <button id="btnEraser" onclick="DrawSystem.setTool('eraser')"
+                title="Borracha"
+                style="width:30px;height:30px;background:#1a1208;border:1px solid #8a6a1a;
+                  color:#c9a84c;border-radius:4px;cursor:pointer;font-size:1rem;">🧹</button>
+
+              <input type="color" id="drawColor" value="#e74c3c"
+                title="Cor"
+                style="width:30px;height:30px;padding:0;border:1px solid #8a6a1a;
+                  border-radius:4px;cursor:pointer;background:none;">
+
+              <input type="range" id="drawSize" min="2" max="30" value="4"
+                title="Espessura"
+                style="width:60px;accent-color:#c9a84c;">
+
+              <button id="btnClearDraw" onclick="DrawSystem.clear()"
+                title="Limpar desenho"
+                style="width:30px;height:30px;background:#1a1208;border:1px solid #8b1a1a;
+                  color:#e74c3c;border-radius:4px;cursor:pointer;font-size:0.9rem;">🗑</button>
             </div>
           </div>
         </aside>

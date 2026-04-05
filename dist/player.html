@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -141,6 +142,72 @@
       color: var(--color-text-secondary);
     }
 
+    .grimoire-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .grimoire-card {
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 0.75rem;
+      border-left: 3px solid var(--color-accent-gold);
+    }
+
+    .grimoire-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.5rem;
+    }
+
+    .grimoire-card-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .grimoire-card-type {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      background: var(--color-bg-tertiary);
+    }
+
+    .grimoire-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .grimoire-tag {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.35rem;
+      border-radius: 3px;
+      background: rgba(212, 175, 55, 0.2);
+      color: var(--color-accent-gold);
+    }
+
+    .grimoire-tag.dano { background: rgba(220, 38, 38, 0.2); color: #ef4444; }
+    .grimoire-tag.cura { background: rgba(22, 163, 74, 0.2); color: #22c55e; }
+    .grimoire-tag.controle { background: rgba(147, 51, 234, 0.2); color: #a855f7; }
+    .grimoire-tag.suporte { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+    .grimoire-tag.truque { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+    .grimoire-tag.passiva { background: rgba(212, 175, 55, 0.2); color: #fbbf24; }
+
+    .grimoire-desc {
+      font-size: 0.8rem;
+      color: var(--color-text-secondary);
+      margin-bottom: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .grimoire-use-btn {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+    }
+
     .map-viewer {
       background: var(--color-bg-card);
       border-radius: var(--radius-lg);
@@ -223,7 +290,7 @@
       transform: translateX(-50%);
       font-size: 0.6rem;
       white-space: nowrap;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0, 0, 0, 0.7);
       padding: 1px 4px;
       border-radius: 2px;
       color: white;
@@ -258,7 +325,7 @@
     .message {
       margin-bottom: 0.5rem;
       padding-bottom: 0.5rem;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .message:last-child {
@@ -351,8 +418,15 @@
     }
 
     @keyframes pulse-red {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
-      50% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5);
+      }
+
+      50% {
+        box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+      }
     }
 
     .turn-indicator {
@@ -360,7 +434,7 @@
       top: 70px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0,0,0,0.9);
+      background: rgba(0, 0, 0, 0.9);
       border: 2px solid var(--color-accent-gold);
       padding: 0.5rem 1.5rem;
       border-radius: var(--radius-md);
@@ -395,8 +469,15 @@
     }
 
     @keyframes glow-green {
-      0%, 100% { box-shadow: 0 0 5px rgba(22, 163, 74, 0.5); }
-      50% { box-shadow: 0 0 20px rgba(22, 163, 74, 0.8); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 5px rgba(22, 163, 74, 0.5);
+      }
+
+      50% {
+        box-shadow: 0 0 20px rgba(22, 163, 74, 0.8);
+      }
     }
 
     .battle-mode .chat-container {
@@ -409,19 +490,20 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/player-DfeOnvNN.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/sounds-gK9Dals0.js">
-  <link rel="modulepreload" crossorigin href="/assets/dice-CtbpK7_c.js">
-  <link rel="modulepreload" crossorigin href="/assets/battle-pCgxGZs_.js">
-  <link rel="modulepreload" crossorigin href="/assets/sheet-CbWAaHRe.js">
-  <link rel="stylesheet" crossorigin href="/assets/sounds-9glUlBov.css">
+  <script type="module" crossorigin src="/assets/player-T-ybLkX6.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/sounds-DvokLOTz.js">
+  <link rel="modulepreload" crossorigin href="/assets/dice-B1K2oSAH.js">
+  <link rel="modulepreload" crossorigin href="/assets/battle-E3W_S5g0.js">
+  <link rel="stylesheet" crossorigin href="/assets/sounds-Cb40SYvq.css">
   <link rel="stylesheet" crossorigin href="/assets/battle-grDkpdPG.css">
 </head>
+
 <body class="page battle-mode">
   <div class="turn-indicator" id="turnIndicator"></div>
   <div class="battle-indicator" id="battleIndicator">⚔️ MODO BATALHA - Sua Vez!</div>
 
-  <header style="background: var(--color-bg-secondary); padding: 1rem 0; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
+  <header
+    style="background: var(--color-bg-secondary); padding: 1rem 0; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
     <div class="container">
       <div class="flex flex-between flex-center">
         <h1 style="font-size: 1.25rem; margin: 0;">🏰 RPG Platform</h1>
@@ -457,43 +539,26 @@
               </div>
             </div>
 
-            <div class="resource-bar">
-              <div class="resource-label">
-                <span>💧 Mana</span>
-                <span id="manaText">0 / 0</span>
-              </div>
-              <div class="bar-container">
-                <div class="bar-fill mana" id="manaBar" style="width: 0%"></div>
-              </div>
-            </div>
-
-            <div class="resource-bar">
-              <div class="resource-label">
-                <span>⚡ Estamina</span>
-                <span id="staminaText">0 / 0</span>
-              </div>
-              <div class="bar-container">
-                <div class="bar-fill stamina" id="staminaBar" style="width: 0%"></div>
-              </div>
-            </div>
-
             <div class="status-badges" id="statusBadges"></div>
-          </div>
+            </div>
 
           <div class="tabs">
-            <button class="tab active" data-tab="attacks">⚔️ Ataques</button>
-            <button class="tab" data-tab="spells">✨ Magias</button>
+            <button class="tab active" data-tab="general">👤 Geral</button>
+            <button class="tab" data-tab="abilities">⚔️ Habilidades</button>
+            <button class="tab" data-tab="grimoire">📖 Grimório</button>
             <button class="tab" data-tab="items">🎒 Itens</button>
           </div>
 
           <div class="sheet-section">
-            <div id="attacksList" class="ability-list"></div>
-            <div id="spellsList" class="ability-list hidden"></div>
-            <div id="itemsList" class="ability-list hidden"></div>
+            <div id="generalTab" class="tab-content"></div>
+            <div id="abilitiesTab" class="tab-content hidden"></div>
+            <div id="grimoireTab" class="tab-content hidden"></div>
+            <div id="itemsTab" class="tab-content hidden"></div>
           </div>
         </aside>
 
         <section class="main-area">
+          <div id="allPlayerCards" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
           <div class="map-viewer" id="mapViewer">
             <div id="mapWrapper" class="map-wrapper">
               <img id="mapImage" class="map-image" style="display: none;">
@@ -515,13 +580,13 @@
               <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d20">d20</button>
             </div>
             <div class="dice-result" id="diceResult">-</div>
-            
+
             <div class="chat-messages" id="chatMessages"></div>
-            
+
             <form class="chat-input-area" id="chatForm">
-               <input type="text" id="chatInput" class="input" placeholder="Conectando..." autocomplete="off" disabled>
-               <button type="submit" class="btn btn-primary" id="chatSendBtn" disabled>Enviar</button>
-             </form>
+              <input type="text" id="chatInput" class="input" placeholder="Conectando..." autocomplete="off" disabled>
+              <button type="submit" class="btn btn-primary" id="chatSendBtn" disabled>Enviar</button>
+            </form>
           </div>
         </section>
       </div>
@@ -529,4 +594,5 @@
   </main>
 
 </body>
+
 </html>

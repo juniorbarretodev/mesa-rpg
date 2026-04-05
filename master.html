@@ -773,9 +773,15 @@
       init() {
         this.canvas = document.getElementById('drawCanvas');
         if (!this.canvas) return;
-        this.ctx = this.canvas.getContext('2d');
+        this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
         this.resize();
         window.addEventListener('resize', () => this.resize());
+
+        document.addEventListener('mousedown', (e) => {
+          if (this.tool !== 'none' && e.target !== this.canvas && !e.target.closest('#drawToolbar')) {
+            this.setTool('none');
+          }
+        });
 
         this.canvas.addEventListener('mousedown', (e) => {
           if (this.tool === 'none') return;
