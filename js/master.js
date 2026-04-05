@@ -26,6 +26,10 @@ export const MasterSystem = {
       return;
     }
 
+    document.getElementById('btnAddHostil')?.addEventListener('click', () => this.openNpcModal('hostile'));
+    document.getElementById('btnAddNeutro')?.addEventListener('click', () => this.openNpcModal('neutral'));
+    document.getElementById('btnAddAmigavel')?.addEventListener('click', () => this.openNpcModal('friendly'));
+
     await this.subscribeToPlayerSheets();
     // setupNPCPanel removido — novo sistema de NPC está no master.html
   },
@@ -247,11 +251,11 @@ export const MasterSystem = {
           </div>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button onclick="this.closest('.modal-overlay').remove()"
+          <button id="btnCancelNpc_${modalId}"
             style="background:transparent;border:1px solid #8a6a1a;color:#c9a84c;padding:8px 16px;border-radius:4px;cursor:pointer;">
             Cancelar
           </button>
-          <button onclick="MasterSystem.createNpcFromModal('${type}', '${modalId}')"
+          <button id="btnCreateNpc_${modalId}"
             style="background:${colors[type]};border:none;color:white;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">
             Criar NPC
           </button>
@@ -259,6 +263,15 @@ export const MasterSystem = {
       </div>
     `;
     document.body.appendChild(modal);
+
+    document.getElementById(`btnCancelNpc_${modalId}`).addEventListener('click', () => {
+      modal.remove();
+    });
+
+    document.getElementById(`btnCreateNpc_${modalId}`).addEventListener('click', () => {
+      this.createNpcFromModal(type, modalId);
+    });
+
     document.getElementById(`npcModalName_${modalId}`).focus();
   },
 

@@ -475,12 +475,9 @@
           <div class="panel">
             <h3 class="panel-title">⚔️ NPCs</h3>
             <div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;">
-              <button class="btn btn-sm" style="background:#dc2626;color:white;border:none;"
-                onclick="MasterSystem.openNpcModal('hostile')">+ Hostil</button>
-              <button class="btn btn-sm" style="background:#ca8a04;color:white;border:none;"
-                onclick="MasterSystem.openNpcModal('neutral')">+ Neutro</button>
-              <button class="btn btn-sm" style="background:#16a34a;color:white;border:none;"
-                onclick="MasterSystem.openNpcModal('friendly')">+ Amigável</button>
+              <button id="btnAddHostil" class="btn btn-sm" style="background:#dc2626;color:white;border:none;">+ Hostil</button>
+              <button id="btnAddNeutro" class="btn btn-sm" style="background:#ca8a04;color:white;border:none;">+ Neutro</button>
+              <button id="btnAddAmigavel" class="btn btn-sm" style="background:#16a34a;color:white;border:none;">+ Amigável</button>
             </div>
             <div id="npcCardsContainer" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0;min-height:40px;"></div>
           </div>
