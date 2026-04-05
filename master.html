@@ -757,12 +757,7 @@
       MapSystem.toggleGrid();
     });
 
-    document.getElementById('clearDrawingBtn').addEventListener('click', async () => {
-      if (confirm('Limpar todo o desenho do mapa?')) {
-        await MapSystem.clearDrawing();
-        SoundManager.playButtonClick();
-      }
-    });
+
 
     setInterval(() => {
       renderTokens();
