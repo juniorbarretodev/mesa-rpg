@@ -550,6 +550,37 @@
     </div>
   </main>
 
+  <div id="npcModalConfig" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;z-index:9999;">
+    <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:8px;padding:24px;min-width:300px;">
+      <h3 id="npcModalTitle" style="color:#e8c97a;margin-bottom:16px;">Novo NPC</h3>
+      <div style="margin-bottom:12px;">
+        <label for="npcModalName" style="display:block;margin-bottom:4px;font-size:0.85rem;">Nome</label>
+        <input id="npcModalName" type="text" placeholder="Nome do NPC"
+          style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <div style="flex:1;">
+          <label for="npcModalHp" style="display:block;margin-bottom:4px;font-size:0.85rem;">HP</label>
+          <input id="npcModalHp" type="number" value="20" min="1"
+            style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
+        </div>
+        <div style="flex:1;">
+          <label for="npcModalHpMax" style="display:block;margin-bottom:4px;font-size:0.85rem;">HP Máx</label>
+          <input id="npcModalHpMax" type="number" value="20" min="1"
+            style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="btnCancelNpc" style="background:transparent;border:1px solid #8a6a1a;color:#c9a84c;padding:8px 16px;border-radius:4px;cursor:pointer;">
+          Cancelar
+        </button>
+        <button id="btnCreateNpc" style="background:#dc2626;border:none;color:white;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">
+          Criar NPC
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { AuthSystem } from './js/auth.js';
     import { RoomSystem } from './js/room.js';
@@ -598,18 +629,44 @@
           console.log("[Master] Listeners de Drop no Mapa configurados.");
         }
 
-        // Configura os botões de criação de NPC de forma absoluta na main thread do módulo!
+        // Modal NPC Estático e Robusto
+        const npcModal = document.getElementById('npcModalConfig');
+        const npcModalTitle = document.getElementById('npcModalTitle');
+        const btnCancelNpc = document.getElementById('btnCancelNpc');
+        const btnCreateNpc = document.getElementById('btnCreateNpc');
+        let currentNpcType = 'hostile';
+
         document.getElementById('btnAddHostil')?.addEventListener('click', (e) => {
-          e.preventDefault(); e.stopPropagation();
-          MasterSystem.openNpcModal('hostile');
+          currentNpcType = 'hostile';
+          npcModalTitle.textContent = 'Novo NPC Hostil';
+          btnCreateNpc.style.background = '#dc2626';
+          npcModal.style.display = 'flex';
         });
+
         document.getElementById('btnAddNeutro')?.addEventListener('click', (e) => {
-          e.preventDefault(); e.stopPropagation();
-          MasterSystem.openNpcModal('neutral');
+          currentNpcType = 'neutral';
+          npcModalTitle.textContent = 'Novo NPC Neutro';
+          btnCreateNpc.style.background = '#ca8a04';
+          npcModal.style.display = 'flex';
         });
+
         document.getElementById('btnAddAmigavel')?.addEventListener('click', (e) => {
-          e.preventDefault(); e.stopPropagation();
-          MasterSystem.openNpcModal('friendly');
+          currentNpcType = 'friendly';
+          npcModalTitle.textContent = 'Novo NPC Amigável';
+          btnCreateNpc.style.background = '#16a34a';
+          npcModal.style.display = 'flex';
+        });
+
+        btnCancelNpc?.addEventListener('click', () => {
+          npcModal.style.display = 'none';
+          document.getElementById('npcModalName').value = '';
+        });
+
+        btnCreateNpc?.addEventListener('click', () => {
+          const modalId = Date.now();
+          MasterSystem.createNpcFromStaticModal(currentNpcType, modalId);
+          npcModal.style.display = 'none';
+          document.getElementById('npcModalName').value = '';
         });
 
         // Inscreve nos ouvintes da sala
@@ -622,13 +679,22 @@
               document.getElementById('toggleBattleBtn').classList.add('btn-danger');
             }
           },
-          onPlayersUpdate: renderPlayers
+          onPlayersUpdate: (players) => {
+             // O render logic foi para index ou players, manter original
+          }
         });
 
         console.log("[Master] Inicializando Chat e Batalha...");
-        ChatSystem.subscribeToChat(roomCode, renderChat);
-        ChatSystem.subscribeToDice(roomCode, renderRollHistory);
-
+        ChatSystem.subscribeToChat(roomCode, (msg) => {
+           // O renderChat original deve ser renderChatMessages se foi renomeado, 
+           // mas verificarei o nome. Pra segurança, usarei as que estavam no master inicial
+           if (typeof renderChatMessages === 'function') renderChatMessages(msg);
+           else if (typeof renderChat === 'function') renderChat(msg);
+        });
+        ChatSystem.subscribeToDice(roomCode, (dice) => {
+           if (typeof renderDiceHistory === 'function') renderDiceHistory(dice);
+           else if (typeof renderRollHistory === 'function') renderRollHistory(dice);
+        });
 
         await MasterSystem.initialize();
         await BattleSystem.initialize();

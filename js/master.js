@@ -221,6 +221,28 @@ export const MasterSystem = {
     this.renderPlayerSheets();
   },
 
+  createNpcFromStaticModal(type, modalId) {
+    const name = document.getElementById('npcModalName')?.value?.trim() || 'NPC';
+    const hp   = parseInt(document.getElementById('npcModalHp')?.value)    || 20;
+    const hpMax= parseInt(document.getElementById('npcModalHpMax')?.value) || 20;
+    const colors = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
+    const typeMap = { hostile: 'enemy', neutral: 'npc', friendly: 'friendly' };
+
+    const npc = {
+      id: `npc_${Date.now()}`,
+      name,
+      hp,
+      hpMax,
+      type: typeMap[type],
+      color: colors[type],
+      status: 'Normal'
+    };
+
+    if (!this.npcCards) this.npcCards = {};
+    this.npcCards[npc.id] = npc;
+    this.renderNpcCard(npc);
+  },
+
   openNpcModal(type) {
     document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
     const colors = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
