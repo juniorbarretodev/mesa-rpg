@@ -251,11 +251,11 @@ export const MasterSystem = {
           </div>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button id="btnCancelNpc_${modalId}"
+          <button id="btnCancelNpc_${modalId}" onclick="this.closest('.modal-overlay').remove()"
             style="background:transparent;border:1px solid #8a6a1a;color:#c9a84c;padding:8px 16px;border-radius:4px;cursor:pointer;">
             Cancelar
           </button>
-          <button id="btnCreateNpc_${modalId}"
+          <button id="btnCreateNpc_${modalId}" onclick="window.MasterSystem.createNpcFromModal('${type}', '${modalId}')"
             style="background:${colors[type]};border:none;color:white;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">
             Criar NPC
           </button>
