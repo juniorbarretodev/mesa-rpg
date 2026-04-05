@@ -218,8 +218,10 @@ export const MasterSystem = {
   },
 
   openNpcModal(type) {
+    document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
     const colors = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
     const labels = { hostile: 'Hostil', neutral: 'Neutro', friendly: 'Amigável' };
+    const modalId = Date.now();
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
@@ -228,19 +230,19 @@ export const MasterSystem = {
       <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:8px;padding:24px;min-width:300px;">
         <h3 style="color:#e8c97a;margin-bottom:16px;">Novo NPC ${labels[type]}</h3>
         <div style="margin-bottom:12px;">
-          <label style="display:block;margin-bottom:4px;font-size:0.85rem;">Nome</label>
-          <input id="npcModalName" type="text" placeholder="Nome do NPC"
+          <label for="npcModalName_${modalId}" style="display:block;margin-bottom:4px;font-size:0.85rem;">Nome</label>
+          <input id="npcModalName_${modalId}" type="text" placeholder="Nome do NPC"
             style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
         </div>
         <div style="display:flex;gap:8px;margin-bottom:16px;">
           <div style="flex:1;">
-            <label style="display:block;margin-bottom:4px;font-size:0.85rem;">HP</label>
-            <input id="npcModalHp" type="number" value="20" min="1"
+            <label for="npcModalHp_${modalId}" style="display:block;margin-bottom:4px;font-size:0.85rem;">HP</label>
+            <input id="npcModalHp_${modalId}" type="number" value="20" min="1"
               style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
           </div>
           <div style="flex:1;">
-            <label style="display:block;margin-bottom:4px;font-size:0.85rem;">HP Máx</label>
-            <input id="npcModalHpMax" type="number" value="20" min="1"
+            <label for="npcModalHpMax_${modalId}" style="display:block;margin-bottom:4px;font-size:0.85rem;">HP Máx</label>
+            <input id="npcModalHpMax_${modalId}" type="number" value="20" min="1"
               style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
           </div>
         </div>
@@ -249,7 +251,7 @@ export const MasterSystem = {
             style="background:transparent;border:1px solid #8a6a1a;color:#c9a84c;padding:8px 16px;border-radius:4px;cursor:pointer;">
             Cancelar
           </button>
-          <button onclick="MasterSystem.createNpcFromModal('${type}')"
+          <button onclick="MasterSystem.createNpcFromModal('${type}', '${modalId}')"
             style="background:${colors[type]};border:none;color:white;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">
             Criar NPC
           </button>
@@ -257,17 +259,17 @@ export const MasterSystem = {
       </div>
     `;
     document.body.appendChild(modal);
-    document.getElementById('npcModalName').focus();
+    document.getElementById(`npcModalName_${modalId}`).focus();
   },
 
-  createNpcFromModal(type) {
-    const name = document.getElementById('npcModalName')?.value?.trim() || 'NPC';
-    const hp   = parseInt(document.getElementById('npcModalHp')?.value)    || 20;
-    const hpMax= parseInt(document.getElementById('npcModalHpMax')?.value) || 20;
+  createNpcFromModal(type, modalId) {
+    const name = document.getElementById(`npcModalName_${modalId}`)?.value?.trim() || 'NPC';
+    const hp   = parseInt(document.getElementById(`npcModalHp_${modalId}`)?.value)    || 20;
+    const hpMax= parseInt(document.getElementById(`npcModalHpMax_${modalId}`)?.value) || 20;
     const colors = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
     const typeMap = { hostile: 'enemy', neutral: 'npc', friendly: 'friendly' };
 
-    document.querySelector('.modal-overlay')?.remove();
+    document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
 
     const npc = {
       id: `npc_${Date.now()}`,
@@ -323,6 +325,7 @@ export const MasterSystem = {
           <button onclick="MasterSystem.adjustNpcHP('${npc.id}',-1)"
             style="background:#dc2626;border:none;color:white;width:20px;height:20px;border-radius:3px;cursor:pointer;font-size:0.8rem;">−</button>
           <input id="npc-hp-${npc.id}" type="number" value="${npc.hp}" min="0" max="${npc.hpMax}"
+            aria-label="Vida atual do NPC"
             onchange="MasterSystem.setNpcHP('${npc.id}', this.value)"
             style="width:36px;text-align:center;background:#0a0705;border:1px solid #8a6a1a;
               color:#e8d8b0;border-radius:3px;padding:2px;font-size:0.75rem;">
@@ -335,7 +338,7 @@ export const MasterSystem = {
         </div>
       </div>
 
-      <select id="npc-status-${npc.id}" onchange="MasterSystem.setNpcStatus('${npc.id}', this.value)"
+      <select id="npc-status-${npc.id}" aria-label="Status do NPC" onchange="MasterSystem.setNpcStatus('${npc.id}', this.value)"
         style="width:100%;margin-top:8px;background:#0a0705;border:1px solid #8a6a1a;
           color:#a08050;border-radius:3px;padding:3px;font-size:0.65rem;">
         ${statuses.map(s => `<option value="${s}" ${npc.status===s?'selected':''}>${s}</option>`).join('')}

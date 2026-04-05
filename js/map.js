@@ -521,21 +521,21 @@ export const MapSystem = {
       <div class="modal-content">
         <h3>Editar Token: ${token.name}</h3>
         <div class="form-group">
-          <label>Nome</label>
+          <label for="tokenName">Nome</label>
           <input type="text" id="tokenName" value="${token.name}">
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>HP</label>
+            <label for="tokenHp">HP</label>
             <input type="number" id="tokenHp" value="${token.hp}" min="0">
           </div>
           <div class="form-group">
-            <label>HP Max</label>
+            <label for="tokenHpMax">HP Max</label>
             <input type="number" id="tokenHpMax" value="${token.hpMax}" min="1">
           </div>
         </div>
         <div class="form-group">
-          <label>Tipo</label>
+          <label for="tokenType">Tipo</label>
           <select id="tokenType">
             <option value="enemy" ${token.type === 'enemy' ? 'selected' : ''}>Inimigo</option>
             <option value="npc" ${token.type === 'npc' ? 'selected' : ''}>NPC</option>

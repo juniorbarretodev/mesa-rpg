@@ -621,6 +621,7 @@
 
         await MasterSystem.initialize();
         await BattleSystem.initialize();
+        if (window.DrawSystem) window.DrawSystem.init();
 
         // Habilita o chat após entrar na sala
         const chatInput = document.getElementById('chatInput');
@@ -763,7 +764,7 @@
       renderTokens();
     }, 2000);
 
-    const DrawSystem = {
+    window.DrawSystem = {
       tool: 'none',
       drawing: false,
       canvas: null,
@@ -833,9 +834,6 @@
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
       }
     };
-
-    setTimeout(() => DrawSystem.init(), 500);
-    window.DrawSystem = DrawSystem;
 
     window.addEventListener('beforeunload', () => {
       ChatSystem.unsubscribe();
