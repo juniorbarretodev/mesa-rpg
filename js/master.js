@@ -204,126 +204,215 @@ export const MasterSystem = {
     this.renderPlayerSheets();
   },
 
+  // ── NPC SYSTEM (reescrito do zero) ────────────────────
+
+  _npcCreating: false,  // flag de delay para evitar criação dupla
+
   openNpcModal(type) {
+    // Remove qualquer modal aberto
     document.querySelectorAll('.modal-overlay-npc').forEach(el => el.remove());
 
-    const colors = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
-    const labels = { hostile: 'Hostil', neutral: 'Neutro', friendly: 'Amigável' };
-    const modalId = Date.now();
+    const COLORS = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
+    const LABELS = { hostile: 'Hostil',  neutral: 'Neutro',  friendly: 'Amigável' };
+    const color  = COLORS[type] || '#888';
+    const label  = LABELS[type] || 'NPC';
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay-npc';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    modal.style.cssText = [
+      'position:fixed', 'inset:0', 'background:rgba(0,0,0,0.75)',
+      'display:flex', 'align-items:center', 'justify-content:center', 'z-index:9999'
+    ].join(';');
+
     modal.innerHTML = `
-      <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:8px;padding:24px;min-width:300px;">
-        <h3 style="color:#e8c97a;margin-bottom:16px;">Novo NPC ${labels[type]}</h3>
-        <div style="margin-bottom:12px;">
-          <label style="display:block;margin-bottom:4px;font-size:0.85rem;">Nome</label>
-          <input id="npcModalName_${modalId}" type="text" placeholder="Nome do NPC"
-            style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
-        </div>
+      <div style="background:#1a1208;border:2px solid ${color};border-radius:8px;
+                  padding:24px;min-width:300px;max-width:360px;width:90%;">
+        <h3 style="color:${color};margin:0 0 16px;font-family:'Cinzel',serif;
+                   font-size:1rem;letter-spacing:2px;">+ NPC ${label}</h3>
+
+        <label style="display:block;margin-bottom:4px;font-size:0.8rem;color:#a08050;">Nome</label>
+        <input id="_npcName" type="text" placeholder="Nome do NPC" autofocus
+          style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;
+                 padding:8px;border-radius:4px;margin-bottom:12px;box-sizing:border-box;">
+
         <div style="display:flex;gap:8px;margin-bottom:16px;">
           <div style="flex:1;">
-            <label style="display:block;margin-bottom:4px;font-size:0.85rem;">HP Atual</label>
-            <input id="npcModalHp_${modalId}" type="number" value="20" min="1"
-              style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
+            <label style="display:block;margin-bottom:4px;font-size:0.8rem;color:#a08050;">HP</label>
+            <input id="_npcHp" type="number" value="20" min="1"
+              style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;
+                     padding:8px;border-radius:4px;box-sizing:border-box;">
           </div>
           <div style="flex:1;">
-            <label style="display:block;margin-bottom:4px;font-size:0.85rem;">HP Máx</label>
-            <input id="npcModalHpMax_${modalId}" type="number" value="20" min="1"
-              style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
+            <label style="display:block;margin-bottom:4px;font-size:0.8rem;color:#a08050;">HP Máx</label>
+            <input id="_npcHpMax" type="number" value="20" min="1"
+              style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;
+                     padding:8px;border-radius:4px;box-sizing:border-box;">
           </div>
         </div>
+
         <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button type="button" class="btn-cancel" style="background:transparent;border:1px solid #8a6a1a;color:#c9a84c;padding:8px 16px;border-radius:4px;cursor:pointer;">
+          <button id="_npcCancel"
+            style="background:transparent;border:1px solid #8a6a1a;color:#c9a84c;
+                   padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.85rem;">
             Cancelar
           </button>
-          <button type="button" class="btn-create" style="background:${colors[type]};border:none;color:white;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">
+          <button id="_npcConfirm"
+            style="background:${color};border:none;color:white;padding:8px 16px;
+                   border-radius:4px;cursor:pointer;font-weight:bold;font-size:0.85rem;">
             Criar NPC
           </button>
         </div>
       </div>
     `;
-    document.body.appendChild(modal);
 
-    modal.querySelector('.btn-cancel').addEventListener('click', () => modal.remove());
-    modal.querySelector('.btn-create').addEventListener('click', () => {
-      this.createNpcFromModal(type, modalId);
-      modal.remove();
+    document.body.appendChild(modal);
+    modal.querySelector('#_npcName').focus();
+
+    // fechar ao clicar fora
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
     });
 
-    document.getElementById(`npcModalName_${modalId}`).focus();
+    modal.querySelector('#_npcCancel').addEventListener('click', () => modal.remove());
+
+    modal.querySelector('#_npcConfirm').addEventListener('click', () => {
+      if (this._npcCreating) return;  // guard contra duplo clique
+
+      const name  = modal.querySelector('#_npcName').value.trim() || 'NPC';
+      const hp    = Math.max(1, parseInt(modal.querySelector('#_npcHp').value)    || 20);
+      const hpMax = Math.max(1, parseInt(modal.querySelector('#_npcHpMax').value) || 20);
+
+      modal.remove();
+      this._createNpc(type, name, hp, hpMax);
+    });
+
+    // Enter no campo nome confirma
+    modal.querySelector('#_npcName').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') modal.querySelector('#_npcConfirm').click();
+    });
   },
 
-  createNpcFromModal(type, modalId) {
-    const nameInput = document.getElementById(`npcModalName_${modalId}`);
-    const hpInput = document.getElementById(`npcModalHp_${modalId}`);
-    const hpMaxInput = document.getElementById(`npcModalHpMax_${modalId}`);
+  _createNpc(type, name, hp, hpMax) {
+    if (this._npcCreating) return;
+    this._npcCreating = true;
 
-    const name = nameInput?.value?.trim() || 'NPC';
-    const hp = parseInt(hpInput?.value) || 20;
-    const hpMax = parseInt(hpMaxInput?.value) || 20;
+    // delay de 5s para evitar conflitos de comunicação
+    setTimeout(() => { this._npcCreating = false; }, 5000);
 
-    const colors = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
-    const typeMap = { hostile: 'enemy', neutral: 'npc', friendly: 'friendly' };
-
-    const npc = {
-      id: `npc_${Date.now()}`,
-      name, hp, hpMax,
-      status: '',
-      type: typeMap[type] || 'npc',
-      alignment: type,
-      color: colors[type]
-    };
+    const COLORS  = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
+    const TYPEKEY = { hostile: 'enemy',   neutral: 'npc',     friendly: 'friendly' };
 
     if (!this.npcCards) this.npcCards = {};
-    this.npcCards[npc.id] = npc;
 
-    this.renderNpcCard(npc);
-    SoundManager.playDiceLand();
+    const npc = {
+      id:        `npc_${Date.now()}`,
+      name,
+      hp,
+      hpMax,
+      status:    '—',
+      alignment: type,
+      type:      TYPEKEY[type] || 'npc',
+      color:     COLORS[type]  || '#888'
+    };
+
+    this.npcCards[npc.id] = npc;
+    this._renderNpcCard(npc);
+    try { SoundManager.playNotification(); } catch(e) {}
   },
 
-  renderNpcCard(npc) {
+  _renderNpcCard(npc) {
     const container = document.getElementById('npcCardsContainer');
     if (!container) return;
 
-    const colors = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
-    const labels = { hostile: 'Hostil', neutral: 'Neutro', friendly: 'Amigável' };
-    const statuses = ['—', 'Caído', 'Sangrando', 'Paralizado', 'Atordoado', 'Envenenado', 'Assustado', 'Cego'];
-    const hpPct = Math.max(0, Math.min(100, (npc.hp / npc.hpMax) * 100));
-    const color = colors[npc.alignment] || npc.color || '#888';
+    const COLORS  = { hostile: '#dc2626', neutral: '#ca8a04', friendly: '#16a34a' };
+    const LABELS  = { hostile: 'Hostil',  neutral: 'Neutro',  friendly: 'Amigável' };
+    const STATUSES = ['—','Caído','Sangrando','Paralizado','Atordoado','Envenenado','Assustado','Cego'];
 
+    const color  = COLORS[npc.alignment]  || npc.color || '#888';
+    const label  = LABELS[npc.alignment]  || 'NPC';
+    const hpPct  = Math.max(0, Math.min(100, (npc.hp / npc.hpMax) * 100));
+    const barBg  = hpPct > 50 ? '#16a34a' : hpPct > 25 ? '#ca8a04' : '#dc2626';
+
+    // Remove card anterior se existir (re-render)
     document.getElementById(`npc-card-${npc.id}`)?.remove();
 
     const card = document.createElement('div');
-    card.id = `npc-card-${npc.id}`;
+    card.id        = `npc-card-${npc.id}`;
     card.draggable = true;
-    card.style.cssText = `width:140px; background:#1a1208; border:2px solid ${color}; border-radius:6px; padding:10px; position:relative; flex-shrink:0; cursor:grab;`;
-    card.innerHTML = `
-      <button onclick="MasterSystem.removeNpc('${npc.id}')" style="position:absolute;top:4px;right:4px;background:none;border:none;color:#888;cursor:pointer;font-size:0.75rem;">✕</button>
-      <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${color};margin-bottom:6px;padding-right:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${npc.name}">
-        ${npc.name}
-      </div>
-      <span style="font-size:0.55rem;background:${color}22;border:1px solid ${color};color:${color};padding:1px 5px;border-radius:2px;font-family:'Cinzel',serif;letter-spacing:1px;">
-        ${labels[npc.alignment] || 'NPC'}
-      </span>
-      <div style="margin-top:8px;">
-        <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
-          <button onclick="MasterSystem.adjustNpcHP('${npc.id}',-1)" style="background:#dc2626;border:none;color:white;width:20px;height:20px;border-radius:3px;cursor:pointer;font-size:0.8rem;">−</button>
-          <input id="npc-hp-${npc.id}" type="number" value="${npc.hp}" min="0" max="${npc.hpMax}" aria-label="Vida atual do NPC" onchange="MasterSystem.setNpcHP('${npc.id}', this.value)" style="width:36px;text-align:center;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;border-radius:3px;padding:2px;font-size:0.75rem;">
-          <span style="color:#666;font-size:0.7rem;">/${npc.hpMax}</span>
-          <button onclick="MasterSystem.adjustNpcHP('${npc.id}',1)" style="background:#16a34a;border:none;color:white;width:20px;height:20px;border-radius:3px;cursor:pointer;font-size:0.8rem;">+</button>
-        </div>
-        <div style="height:6px;background:#333;border-radius:3px;overflow:hidden;">
-          <div id="npc-hpbar-${npc.id}" style="height:100%;width:${hpPct}%;background:${hpPct > 50 ? '#16a34a' : hpPct > 25 ? '#ca8a04' : '#dc2626'};transition:width 0.3s;"></div>
-        </div>
-      </div>
-      <select id="npc-status-${npc.id}" aria-label="Status do NPC" onchange="MasterSystem.setNpcStatus('${npc.id}', this.value)" style="width:100%;margin-top:8px;background:#0a0705;border:1px solid #8a6a1a;color:#a08050;border-radius:3px;padding:3px;font-size:0.65rem;">
-        ${statuses.map(s => `<option value="${s}" ${npc.status === s ? 'selected' : ''}>${s}</option>`).join('')}
-      </select>
-      ${npc.status && npc.status !== '—' ? `<div style="margin-top:4px;font-size:0.6rem;color:#f1c40f;text-align:center;">⚠ ${npc.status}</div>` : ''}
+    card.style.cssText = `
+      width:150px;background:#1a1208;border:2px solid ${color};border-radius:6px;
+      padding:10px;position:relative;flex-shrink:0;cursor:grab;user-select:none;
     `;
 
+    card.innerHTML = `
+      <!-- botão remover -->
+      <button data-action="remove"
+        style="position:absolute;top:4px;right:4px;background:none;border:none;
+               color:#666;cursor:pointer;font-size:0.8rem;line-height:1;">✕</button>
+
+      <!-- nome -->
+      <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:${color};
+                  margin-bottom:5px;padding-right:18px;white-space:nowrap;
+                  overflow:hidden;text-overflow:ellipsis;" title="${npc.name}">
+        ${npc.name}
+      </div>
+
+      <!-- badge tipo -->
+      <span style="font-size:0.5rem;background:${color}22;border:1px solid ${color};
+                   color:${color};padding:1px 5px;border-radius:2px;
+                   font-family:'Cinzel',serif;letter-spacing:1px;">${label}</span>
+
+      <!-- controles HP -->
+      <div style="margin-top:8px;">
+        <div style="display:flex;align-items:center;gap:3px;margin-bottom:4px;">
+          <button data-action="hp-minus"
+            style="background:#dc2626;border:none;color:white;width:20px;height:20px;
+                   border-radius:3px;cursor:pointer;font-size:0.9rem;flex-shrink:0;">−</button>
+          <input data-action="hp-input" type="number"
+            value="${npc.hp}" min="0" max="${npc.hpMax}"
+            style="width:36px;text-align:center;background:#0a0705;border:1px solid #8a6a1a;
+                   color:#e8d8b0;border-radius:3px;padding:2px;font-size:0.75rem;">
+          <span style="color:#666;font-size:0.7rem;flex-shrink:0;">/${npc.hpMax}</span>
+          <button data-action="hp-plus"
+            style="background:#16a34a;border:none;color:white;width:20px;height:20px;
+                   border-radius:3px;cursor:pointer;font-size:0.9rem;flex-shrink:0;">+</button>
+        </div>
+        <!-- barra HP -->
+        <div style="height:5px;background:#333;border-radius:3px;overflow:hidden;">
+          <div data-action="hp-bar"
+            style="height:100%;width:${hpPct}%;background:${barBg};transition:width 0.3s;"></div>
+        </div>
+      </div>
+
+      <!-- status -->
+      <select data-action="status"
+        style="width:100%;margin-top:8px;background:#0a0705;border:1px solid #8a6a1a;
+               color:#a08050;border-radius:3px;padding:3px;font-size:0.62rem;">
+        ${STATUSES.map(s => `<option value="${s}"${npc.status===s?' selected':''}>${s}</option>`).join('')}
+      </select>
+      ${npc.status && npc.status !== '—'
+        ? `<div style="margin-top:3px;font-size:0.58rem;color:#f1c40f;text-align:center;">⚠ ${npc.status}</div>`
+        : ''}
+    `;
+
+    // ── event delegation ──────────────────────────────
+    card.addEventListener('click', (e) => {
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (!action) return;
+      if (action === 'remove')   this._removeNpc(npc.id);
+      if (action === 'hp-minus') this._adjustNpcHP(npc.id, -1);
+      if (action === 'hp-plus')  this._adjustNpcHP(npc.id, +1);
+    });
+
+    card.querySelector('[data-action="hp-input"]').addEventListener('change', (e) => {
+      this._setNpcHP(npc.id, e.target.value);
+    });
+
+    card.querySelector('[data-action="status"]').addEventListener('change', (e) => {
+      this._setNpcStatus(npc.id, e.target.value);
+    });
+
+    // drag para o mapa
     card.addEventListener('dragstart', (e) => {
       e.dataTransfer.setData('npcCard', JSON.stringify(npc));
       e.dataTransfer.effectAllowed = 'copy';
@@ -332,45 +421,57 @@ export const MasterSystem = {
     container.appendChild(card);
   },
 
-  adjustNpcHP(npcId, delta) {
+  _adjustNpcHP(npcId, delta) {
     const npc = this.npcCards?.[npcId];
     if (!npc) return;
     npc.hp = Math.max(0, Math.min(npc.hpMax, npc.hp + delta));
-    this.npcCards[npcId] = npc;
-    this.renderNpcCard(npc);
-    const token = Object.values(MapSystem.tokens || {}).find(t => t.npcCardId === npcId);
-    if (token) MapSystem.updateToken(token.id, { hp: npc.hp });
+    this._updateNpcCardHP(npcId, npc.hp, npc.hpMax);
+    this._syncNpcToken(npcId, npc.hp);
   },
 
-  setNpcHP(npcId, value) {
+  _setNpcHP(npcId, value) {
     const npc = this.npcCards?.[npcId];
     if (!npc) return;
     npc.hp = Math.max(0, Math.min(npc.hpMax, parseInt(value) || 0));
-    this.npcCards[npcId] = npc;
-    const pct = Math.max(0, Math.min(100, (npc.hp / npc.hpMax) * 100));
-    const bar = document.getElementById(`npc-hpbar-${npcId}`);
-    if (bar) {
-      bar.style.width = pct + '%';
-      bar.style.background = pct > 50 ? '#16a34a' : pct > 25 ? '#ca8a04' : '#dc2626';
-    }
-    const token = Object.values(MapSystem.tokens || {}).find(t => t.npcCardId === npcId);
-    if (token) MapSystem.updateToken(token.id, { hp: npc.hp });
+    this._updateNpcCardHP(npcId, npc.hp, npc.hpMax);
+    this._syncNpcToken(npcId, npc.hp);
   },
 
-  setNpcStatus(npcId, status) {
+  _updateNpcCardHP(npcId, hp, hpMax) {
+    const pct = Math.max(0, Math.min(100, (hp / hpMax) * 100));
+    const bar = document.querySelector(`#npc-card-${npcId} [data-action="hp-bar"]`);
+    const inp = document.querySelector(`#npc-card-${npcId} [data-action="hp-input"]`);
+    if (bar) { bar.style.width = pct + '%'; bar.style.background = pct>50?'#16a34a':pct>25?'#ca8a04':'#dc2626'; }
+    if (inp) inp.value = hp;
+  },
+
+  _setNpcStatus(npcId, status) {
     const npc = this.npcCards?.[npcId];
     if (!npc) return;
     npc.status = status;
-    this.npcCards[npcId] = npc;
-    this.renderNpcCard(npc);
+    this._renderNpcCard(npc);  // re-render para atualizar badge
   },
 
-  removeNpc(npcId) {
-    delete this.npcCards?.[npcId];
+  _removeNpc(npcId) {
+    if (this.npcCards) delete this.npcCards[npcId];
     document.getElementById(`npc-card-${npcId}`)?.remove();
-    const token = Object.values(MapSystem.tokens || {}).find(t => t.npcCardId === npcId);
-    if (token) MapSystem.removeToken(token.id);
+    this._syncNpcToken(npcId, null, true);
   },
+
+  _syncNpcToken(npcId, hp, remove = false) {
+    try {
+      const token = Object.values(MapSystem.tokens || {}).find(t => t.npcCardId === npcId);
+      if (!token) return;
+      if (remove) MapSystem.removeToken(token.id);
+      else        MapSystem.updateToken(token.id, { hp });
+    } catch(e) {}
+  },
+
+  // aliases públicos para onclick inline legado (caso existam)
+  adjustNpcHP(id, d)  { this._adjustNpcHP(id, d); },
+  setNpcHP(id, v)     { this._setNpcHP(id, v); },
+  setNpcStatus(id, s) { this._setNpcStatus(id, s); },
+  removeNpc(id)       { this._removeNpc(id); },
 
   async handleMapDrop(e) {
     e.preventDefault();

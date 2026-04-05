@@ -551,6 +551,31 @@
   </main>
 
   <script type="module">
+    import { AuthSystem } from './js/auth.js';
+    import { RoomSystem } from './js/room.js';
+    import { ChatSystem } from './js/chat.js';
+    import { MasterSystem } from './js/master.js';
+    import { MapSystem } from './js/map.js';
+    import { BattleSystem } from './js/battle.js';
+    import { DiceSystem } from './js/dice.js';
+    import { SoundManager } from './js/sounds.js';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCode = urlParams.get('code');
+
+    async function init() {
+      try {
+        if (!roomCode) { window.location.href = 'index.html'; return; }
+
+        await AuthSystem.waitForInitialization();
+        if (!AuthSystem.isAuthenticated()) { window.location.href = 'index.html'; return; }
+
+        await RoomSystem.joinRoom(roomCode);
+
+        document.getElementById('masterNick').textContent = AuthSystem.currentNick || 'Mestre';
+
+        await MapSystem.initialize('mapContainer');
+        MapSystem.subscribeToMap();
 
         // Inscreve nos ouvintes da sala
         RoomSystem.subscribeToRoom(roomCode, {
@@ -596,6 +621,8 @@
         alert("Erro ao carregar mesa. Verifique o console.");
       }
     }
+
+    // ── funções de render ──────────────────────────────
 
     function renderPlayers(players) {
       const container = document.getElementById('playersList');
