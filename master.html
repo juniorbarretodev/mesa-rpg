@@ -475,9 +475,9 @@
           <div class="panel">
             <h3 class="panel-title">⚔️ NPCs</h3>
             <div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;">
-              <button id="btnAddHostil" class="btn btn-sm" style="background:#dc2626;color:white;border:none;">+ Hostil</button>
-              <button id="btnAddNeutro" class="btn btn-sm" style="background:#ca8a04;color:white;border:none;">+ Neutro</button>
-              <button id="btnAddAmigavel" class="btn btn-sm" style="background:#16a34a;color:white;border:none;">+ Amigável</button>
+              <button onclick="MasterSystem.openNpcModal('hostile')" class="btn btn-sm" style="background:#dc2626;color:white;border:none;">+ Hostil</button>
+              <button onclick="MasterSystem.openNpcModal('neutral')" class="btn btn-sm" style="background:#ca8a04;color:white;border:none;">+ Neutro</button>
+              <button onclick="MasterSystem.openNpcModal('friendly')" class="btn btn-sm" style="background:#16a34a;color:white;border:none;">+ Amigável</button>
             </div>
             <div id="npcCardsContainer" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0;min-height:40px;"></div>
           </div>
@@ -550,124 +550,7 @@
     </div>
   </main>
 
-  <div id="npcModalConfig" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;z-index:9999;">
-    <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:8px;padding:24px;min-width:300px;">
-      <h3 id="npcModalTitle" style="color:#e8c97a;margin-bottom:16px;">Novo NPC</h3>
-      <div style="margin-bottom:12px;">
-        <label for="npcModalName" style="display:block;margin-bottom:4px;font-size:0.85rem;">Nome</label>
-        <input id="npcModalName" type="text" placeholder="Nome do NPC"
-          style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:16px;">
-        <div style="flex:1;">
-          <label for="npcModalHp" style="display:block;margin-bottom:4px;font-size:0.85rem;">HP</label>
-          <input id="npcModalHp" type="number" value="20" min="1"
-            style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
-        </div>
-        <div style="flex:1;">
-          <label for="npcModalHpMax" style="display:block;margin-bottom:4px;font-size:0.85rem;">HP Máx</label>
-          <input id="npcModalHpMax" type="number" value="20" min="1"
-            style="width:100%;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:8px;border-radius:4px;">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button id="btnCancelNpc" style="background:transparent;border:1px solid #8a6a1a;color:#c9a84c;padding:8px 16px;border-radius:4px;cursor:pointer;">
-          Cancelar
-        </button>
-        <button id="btnCreateNpc" style="background:#dc2626;border:none;color:white;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">
-          Criar NPC
-        </button>
-      </div>
-    </div>
-  </div>
-
   <script type="module">
-    import { AuthSystem } from './js/auth.js';
-    import { RoomSystem } from './js/room.js';
-    import { ChatSystem } from './js/chat.js';
-    import { DiceSystem } from './js/dice.js';
-    import { SoundManager } from './js/sounds.js';
-    import { MapSystem } from './js/map.js';
-    import { MasterSystem } from './js/master.js';
-    import { BattleSystem } from './js/battle.js';
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomCode = urlParams.get('code');
-
-    async function init() {
-      try {
-        console.log("[Master] Iniciando sistemas...");
-        // Aguarda a inicialização do Firebase antes de verificar o login
-        await AuthSystem.waitForInitialization();
-
-        if (!roomCode || !AuthSystem.isAuthenticated()) {
-          window.location.href = 'index.html';
-          return;
-        }
-
-        await RoomSystem.joinRoom(roomCode);
-        
-        if (!RoomSystem.isMaster) {
-          console.warn("[Master] Acesso negado. Redirecionando para Lobby.");
-          window.location.href = 'lobby.html?code=' + roomCode;
-          return;
-        }
-
-        document.getElementById('masterNick').textContent = AuthSystem.currentNick;
-        document.getElementById('roomName').textContent = RoomSystem.currentRoom?.name || 'Mesa';
-
-        // Inicializa o Mapa primeiro para garantir o container pronto
-        console.log("[Master] Inicializando Mapa...");
-        await MapSystem.initialize('mapContainer');
-        MapSystem.subscribeToMap();
-
-        // Configura o handler de drop de mapa para o MasterSystem
-        const mapWrapper = document.querySelector('.map-wrapper');
-        if (mapWrapper) {
-          mapWrapper.addEventListener('dragover', (e) => e.preventDefault());
-          mapWrapper.addEventListener('drop', (e) => MasterSystem.handleMapDrop(e));
-          console.log("[Master] Listeners de Drop no Mapa configurados.");
-        }
-
-        // Modal NPC Estático e Robusto
-        const npcModal = document.getElementById('npcModalConfig');
-        const npcModalTitle = document.getElementById('npcModalTitle');
-        const btnCancelNpc = document.getElementById('btnCancelNpc');
-        const btnCreateNpc = document.getElementById('btnCreateNpc');
-        let currentNpcType = 'hostile';
-
-        document.getElementById('btnAddHostil')?.addEventListener('click', (e) => {
-          currentNpcType = 'hostile';
-          npcModalTitle.textContent = 'Novo NPC Hostil';
-          btnCreateNpc.style.background = '#dc2626';
-          npcModal.style.display = 'flex';
-        });
-
-        document.getElementById('btnAddNeutro')?.addEventListener('click', (e) => {
-          currentNpcType = 'neutral';
-          npcModalTitle.textContent = 'Novo NPC Neutro';
-          btnCreateNpc.style.background = '#ca8a04';
-          npcModal.style.display = 'flex';
-        });
-
-        document.getElementById('btnAddAmigavel')?.addEventListener('click', (e) => {
-          currentNpcType = 'friendly';
-          npcModalTitle.textContent = 'Novo NPC Amigável';
-          btnCreateNpc.style.background = '#16a34a';
-          npcModal.style.display = 'flex';
-        });
-
-        btnCancelNpc?.addEventListener('click', () => {
-          npcModal.style.display = 'none';
-          document.getElementById('npcModalName').value = '';
-        });
-
-        btnCreateNpc?.addEventListener('click', () => {
-          const modalId = Date.now();
-          MasterSystem.createNpcFromStaticModal(currentNpcType, modalId);
-          npcModal.style.display = 'none';
-          document.getElementById('npcModalName').value = '';
-        });
 
         // Inscreve nos ouvintes da sala
         RoomSystem.subscribeToRoom(roomCode, {

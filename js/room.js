@@ -1,11 +1,11 @@
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
-  collection, 
-  query, 
-  where, 
+import {
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
   getDocs,
   serverTimestamp,
   onSnapshot
@@ -39,7 +39,7 @@ export const RoomSystem = {
     checkInit();
     const code = this.generateRoomCode();
     const user = AuthSystem.currentUser;
-    
+
     if (!user) throw new Error('Usuário não autenticado');
 
     const roomData = {
@@ -53,11 +53,11 @@ export const RoomSystem = {
     };
 
     await setDoc(doc(db, 'rooms', code), roomData);
-    
+
     await set(ref(rtdb, `rooms/${code}`), {
       masterId: user.uid
     });
-    
+
     await set(ref(rtdb, `rooms/${code}/presence/${user.uid}`), {
       online: true,
       lastSeen: Date.now(),
@@ -75,9 +75,12 @@ export const RoomSystem = {
 
   async joinRoom(code) {
     checkInit();
+    if (!code || typeof code !== 'string') {
+      throw new Error('Código da sala inválido ou ausente.');
+    }
     const upperCode = code.toUpperCase();
     const roomSnap = await getDoc(doc(db, 'rooms', upperCode));
-    
+
     if (!roomSnap.exists()) {
       throw new Error('Sala não encontrada. Verifique o código e tente novamente.');
     }
