@@ -40,6 +40,7 @@ export const MapSystem = {
           <p class="text-muted" style="font-size: 0.85rem;">ou clique para selecionar</p>
         </div>
         <input type="file" id="mapFileInput" accept="image/*" style="display: none;">
+        <canvas id="drawCanvas" style="position:absolute;inset:0;z-index:20;pointer-events:none;"></canvas>
       </div>
     `;
 
@@ -418,12 +419,10 @@ export const MapSystem = {
         ${!token.visible && !RoomSystem.isMaster ? 'opacity: 0.3;' : ''}
       `;
 
-      if (token.imageUrl) {
-        tokenEl.style.backgroundImage = `url(${token.imageUrl})`;
-        tokenEl.style.backgroundSize = 'cover';
-      } else {
-        tokenEl.innerHTML = `<span>${token.name.charAt(0).toUpperCase()}</span>`;
-      }
+      const innerContent = token.avatarUrl
+        ? `<img src="${token.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+        : (token.imageUrl ? `<img src="${token.imageUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : `<span>${token.name?.charAt(0)?.toUpperCase() || '?'}</span>`);
+      tokenEl.innerHTML = innerContent;
 
       if (token.hpMax > 0 && RoomSystem.isMaster) {
         const hpBar = document.createElement('div');

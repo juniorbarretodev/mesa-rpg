@@ -556,6 +556,7 @@
         </aside>
 
         <section class="main-area">
+          <div id="allPlayerCards" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
           <div class="map-viewer" id="mapViewer">
             <div id="mapWrapper" class="map-wrapper">
               <img id="mapImage" class="map-image" style="display: none;">
@@ -591,6 +592,8 @@
   </main>
 
   <script type="module">
+    import { collection, onSnapshot } from "firebase/firestore";
+    import { db } from './js/firebase.js';
     import { AuthSystem } from './js/auth.js';
     import { RoomSystem } from './js/room.js';
     import { ChatSystem } from './js/chat.js';
@@ -635,6 +638,46 @@
 
         SheetSystem.subscribeToSheet(roomCode, renderSheet);
         ChatSystem.subscribeToChat(roomCode, renderChat);
+
+        const sheetsRef = collection(db, 'sheets', roomCode, 'players');
+        onSnapshot(sheetsRef, (snap) => {
+          const container = document.getElementById('allPlayerCards');
+          if (!container) return;
+          container.innerHTML = '';
+          snap.forEach(docSnap => {
+            const s = docSnap.data();
+            const hpPct = Math.max(0, Math.min(100, ((s.hp||0)/(s.hpMax||20))*100));
+            const isMe = docSnap.id === AuthSystem.currentUser?.uid;
+            const av = s.avatarUrl
+              ? `<img src="${s.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+              : `<span style="font-size:1.2rem;">${s.name?.[0]?.toUpperCase()||'?'}</span>`;
+            
+            const card = document.createElement('div');
+            card.style.cssText = `
+              background:#1a1208;border:2px solid ${isMe?'#c9a84c':'#4a3820'};
+              border-radius:6px;padding:8px;width:120px;flex-shrink:0;
+            `;
+            card.innerHTML = `
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                <div style="width:32px;height:32px;border-radius:50%;border:1px solid #8a6a1a;
+                  background:#0a0705;overflow:hidden;display:flex;align-items:center;
+                  justify-content:center;flex-shrink:0;">${av}</div>
+                <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#e8c97a;
+                  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  ${s.name || '?'} ${isMe ? '(você)' : ''}
+                </div>
+              </div>
+              <div style="font-size:0.65rem;color:#a08050;margin-bottom:4px;">
+                ❤ ${s.hp||0} / ${s.hpMax||20}
+              </div>
+              <div style="height:5px;background:#333;border-radius:2px;overflow:hidden;">
+                <div style="height:100%;width:${hpPct}%;background:${hpPct>50?'#16a34a':hpPct>25?'#ca8a04':'#dc2626'};"></div>
+              </div>
+              ${(s.status||[]).length>0?`<div style="font-size:0.55rem;color:#f1c40f;margin-top:4px;">⚠ ${s.status.join(', ')}</div>`:''}
+            `;
+            container.appendChild(card);
+          });
+        });
 
         // Habilita o chat após entrar na sala
         const chatInput = document.getElementById('chatInput');

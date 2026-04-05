@@ -238,6 +238,9 @@
       background: rgba(212, 175, 55, 0.2) !important;
     }
 
+    #mapDropZone { cursor: default; pointer-events: none; }
+    #mapDropZone canvas, #mapDropZone .map-token { pointer-events: all; }
+
     .master-sheet-card {
       background: var(--color-bg-secondary);
       border-radius: var(--radius-md);
@@ -471,12 +474,15 @@
 
           <div class="panel">
             <h3 class="panel-title">⚔️ NPCs</h3>
-            <div class="flex gap-sm mb-sm">
-              <button class="btn btn-danger btn-sm" id="addHostileBtn">+ Hostil</button>
-              <button class="btn btn-warning btn-sm" id="addNeutralBtn">+ Neutro</button>
-              <button class="btn btn-success btn-sm" id="addFriendlyBtn">+ Amigável</button>
+            <div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn btn-sm" style="background:#dc2626;color:white;border:none;"
+                onclick="MasterSystem.openNpcModal('hostile')">+ Hostil</button>
+              <button class="btn btn-sm" style="background:#ca8a04;color:white;border:none;"
+                onclick="MasterSystem.openNpcModal('neutral')">+ Neutro</button>
+              <button class="btn btn-sm" style="background:#16a34a;color:white;border:none;"
+                onclick="MasterSystem.openNpcModal('friendly')">+ Amigável</button>
             </div>
-            <div id="npcList" class="tokens-panel"></div>
+            <div id="npcCardsContainer" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0;min-height:40px;"></div>
           </div>
         </aside>
 
@@ -513,8 +519,33 @@
 
           <div class="panel">
             <h3 class="panel-title">🖌️ Ferramentas</h3>
-            <div class="flex flex-col gap-sm">
-              <button class="btn btn-secondary btn-block" id="clearDrawingBtn">🗑️ Limpar Desenho</button>
+            <div id="drawToolbar" style="display:flex;align-items:center;gap:6px;padding:6px;
+              background:#1a1208;border:1px solid #8a6a1a;border-radius:4px;flex-wrap:wrap;">
+              <span style="font-family:'Cinzel',serif;font-size:0.5rem;color:#8a6a1a;letter-spacing:1px;">DESENHO</span>
+
+              <button id="btnPen" onclick="DrawSystem.setTool('pen')"
+                title="Caneta"
+                style="width:30px;height:30px;background:#1a1208;border:1px solid #8a6a1a;
+                  color:#c9a84c;border-radius:4px;cursor:pointer;font-size:1rem;">✏️</button>
+
+              <button id="btnEraser" onclick="DrawSystem.setTool('eraser')"
+                title="Borracha"
+                style="width:30px;height:30px;background:#1a1208;border:1px solid #8a6a1a;
+                  color:#c9a84c;border-radius:4px;cursor:pointer;font-size:1rem;">🧹</button>
+
+              <input type="color" id="drawColor" value="#e74c3c"
+                title="Cor"
+                style="width:30px;height:30px;padding:0;border:1px solid #8a6a1a;
+                  border-radius:4px;cursor:pointer;background:none;">
+
+              <input type="range" id="drawSize" min="2" max="30" value="4"
+                title="Espessura"
+                style="width:60px;accent-color:#c9a84c;">
+
+              <button id="btnClearDraw" onclick="DrawSystem.clear()"
+                title="Limpar desenho"
+                style="width:30px;height:30px;background:#1a1208;border:1px solid #8b1a1a;
+                  color:#e74c3c;border-radius:4px;cursor:pointer;font-size:0.9rem;">🗑</button>
             </div>
           </div>
         </aside>
@@ -587,7 +618,7 @@
         ChatSystem.subscribeToChat(roomCode, renderChat);
         ChatSystem.subscribeToDice(roomCode, renderRollHistory);
 
-        MasterSystem.setupNPCPanel();
+
         await MasterSystem.initialize();
         await BattleSystem.initialize();
 
@@ -704,17 +735,7 @@
       await MasterSystem.endSession();
     });
 
-    document.getElementById('addHostileBtn').addEventListener('click', () => {
-      MasterSystem.showAddNPCTypedModal('hostile');
-    });
 
-    document.getElementById('addNeutralBtn').addEventListener('click', () => {
-      MasterSystem.showAddNPCTypedModal('neutral');
-    });
-
-    document.getElementById('addFriendlyBtn').addEventListener('click', () => {
-      MasterSystem.showAddNPCTypedModal('friendly');
-    });
 
     document.getElementById('loadMapBtn').addEventListener('click', () => {
       const fileInput = document.createElement('input');
@@ -746,6 +767,80 @@
     setInterval(() => {
       renderTokens();
     }, 2000);
+
+    const DrawSystem = {
+      tool: 'none',
+      drawing: false,
+      canvas: null,
+      ctx: null,
+
+      init() {
+        this.canvas = document.getElementById('drawCanvas');
+        if (!this.canvas) return;
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        this.canvas.addEventListener('mousedown', (e) => {
+          if (this.tool === 'none') return;
+          this.drawing = true;
+          const pos = this.getPos(e);
+          this.ctx.beginPath();
+          this.ctx.moveTo(pos.x, pos.y);
+        });
+
+        this.canvas.addEventListener('mousemove', (e) => {
+          if (!this.drawing || this.tool === 'none') return;
+          const pos = this.getPos(e);
+          const size = parseInt(document.getElementById('drawSize')?.value || 4);
+          if (this.tool === 'eraser') {
+            this.ctx.clearRect(pos.x - size, pos.y - size, size * 2, size * 2);
+          } else {
+            this.ctx.strokeStyle = document.getElementById('drawColor')?.value || '#e74c3c';
+            this.ctx.lineWidth   = size;
+            this.ctx.lineCap     = 'round';
+            this.ctx.lineJoin    = 'round';
+            this.ctx.lineTo(pos.x, pos.y);
+            this.ctx.stroke();
+            this.ctx.beginPath();
+            this.ctx.moveTo(pos.x, pos.y);
+          }
+        });
+
+        this.canvas.addEventListener('mouseup',    () => { this.drawing = false; });
+        this.canvas.addEventListener('mouseleave', () => { this.drawing = false; });
+      },
+
+      setTool(tool) {
+        this.tool = (this.tool === tool) ? 'none' : tool;
+        this.canvas.style.pointerEvents = this.tool !== 'none' ? 'all' : 'none';
+        this.canvas.style.cursor = this.tool === 'pen' ? 'crosshair' : this.tool === 'eraser' ? 'cell' : 'default';
+        document.getElementById('btnPen')?.style.setProperty('border-color',    this.tool === 'pen'    ? '#e8c97a' : '#8a6a1a');
+        document.getElementById('btnEraser')?.style.setProperty('border-color', this.tool === 'eraser' ? '#e8c97a' : '#8a6a1a');
+      },
+
+      clear() {
+        if (this.ctx) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      },
+
+      resize() {
+        if (!this.canvas) return;
+        const parent = this.canvas.parentElement;
+        if (!parent) return;
+        const saved = this.ctx?.getImageData(0, 0, this.canvas.width, this.canvas.height);
+        this.canvas.width  = parent.offsetWidth;
+        this.canvas.height = parent.offsetHeight;
+        if (saved) this.ctx.putImageData(saved, 0, 0);
+      },
+
+      getPos(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+    };
+
+    setTimeout(() => DrawSystem.init(), 500);
+    window.DrawSystem = DrawSystem;
 
     window.addEventListener('beforeunload', () => {
       ChatSystem.unsubscribe();
