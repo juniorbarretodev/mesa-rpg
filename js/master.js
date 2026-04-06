@@ -128,6 +128,38 @@ export const MasterSystem = {
     });
   },
 
+  async dragNpcToMap(npcId) {
+    const npc = this.npcCards?.[npcId];
+    if (!npc) return;
+    await MapSystem.addToken({
+      name: npc.name,
+      type: npc.type,
+      hp: npc.hp,
+      hpMax: npc.hpMax,
+      color: npc.color,
+      npcCardId: npc.id
+    });
+    SoundManager.playNotification();
+  },
+
+  syncPlayerToken(playerId) {
+    try {
+      const sheet = this.playerSheets[playerId];
+      if (!sheet) return;
+      const token = Object.values(MapSystem.tokens || {}).find(t => t.ownerId === playerId);
+      if (!token) return;
+      if (token.hp !== sheet.hp || token.hpMax !== sheet.hpMax) {
+        MapSystem.updateToken(token.id, {
+          hp: sheet.hp,
+          hpMax: sheet.hpMax,
+          status: sheet.status || []
+        });
+        MapSystem.renderTokens();
+      }
+    } catch(e) {}
+  },
+
+
   async adjustPlayerHP(playerId, delta) {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
@@ -143,6 +175,7 @@ export const MasterSystem = {
 
     this.playerSheets[playerId] = { ...sheet, hp: newHP };
     this.renderPlayerSheets();
+    this.syncPlayerToken(playerId);
 
     SoundManager.playDiceLand();
   },
@@ -202,6 +235,7 @@ export const MasterSystem = {
     await updateDoc(sheetRef, { status });
     this.playerSheets[playerId] = { ...sheet, status };
     this.renderPlayerSheets();
+    this.syncPlayerToken(playerId);
   },
 
   // ── NPC SYSTEM (reescrito do zero) ────────────────────
@@ -393,6 +427,13 @@ export const MasterSystem = {
       ${npc.status && npc.status !== '—'
         ? `<div style="margin-top:3px;font-size:0.58rem;color:#f1c40f;text-align:center;">⚠ ${npc.status}</div>`
         : ''}
+
+      <!-- add to map -->
+      <button data-action="map"
+        style="width:100%;margin-top:6px;background:#c9a84c;border:none;color:white;
+               padding:4px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">
+        &#x1F5FA;&#xFE0F; Adicionar ao Mapa
+      </button>
     `;
 
     // ── event delegation ──────────────────────────────
@@ -402,6 +443,7 @@ export const MasterSystem = {
       if (action === 'remove')   this._removeNpc(npc.id);
       if (action === 'hp-minus') this._adjustNpcHP(npc.id, -1);
       if (action === 'hp-plus')  this._adjustNpcHP(npc.id, +1);
+      if (action === 'map')      this.dragNpcToMap(npc.id);
     });
 
     card.querySelector('[data-action="hp-input"]').addEventListener('change', (e) => {

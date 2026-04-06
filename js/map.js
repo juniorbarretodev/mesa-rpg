@@ -76,9 +76,19 @@ export const MapSystem = {
         dropZone.classList.remove('drag-over');
       });
 
-      dropZone.addEventListener('drop', (e) => {
+      dropZone.addEventListener('drop', async (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
+
+        // Check for card data transfer (NPC/player drag) first
+        if (e.dataTransfer.types.includes('npcCard') || e.dataTransfer.types.includes('playerCard')) {
+          if (window.MasterSystem) {
+            await window.MasterSystem.handleMapDrop(e);
+          }
+          return;
+        }
+
+        // Otherwise handle as map image
         const file = e.dataTransfer.files[0];
         if (file && file.type.startsWith('image/')) {
           this.uploadMapImage(file);
@@ -89,6 +99,26 @@ export const MapSystem = {
         const file = e.target.files[0];
         if (file) {
           this.uploadMapImage(file);
+        }
+      });
+
+      // Also handle card drag on the map area even after map image is loaded
+      const wrapper = container.querySelector('.map-wrapper');
+      const tokensLayer = container.querySelector('#tokensLayer');
+
+      wrapper.addEventListener('dragover', (e) => {
+        if (e.dataTransfer.types.includes('npcCard') || e.dataTransfer.types.includes('playerCard')) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }
+      });
+
+      wrapper.addEventListener('drop', async (e) => {
+        if (e.dataTransfer.types.includes('npcCard') || e.dataTransfer.types.includes('playerCard')) {
+          e.preventDefault();
+          if (window.MasterSystem) {
+            await window.MasterSystem.handleMapDrop(e);
+          }
         }
       });
 
@@ -460,6 +490,23 @@ export const MapSystem = {
         tokenEl.addEventListener('dblclick', () => {
           this.showTokenEditor(token);
         });
+
+        // X removal button
+        const removeBtn = document.createElement('div');
+        removeBtn.style.cssText = `
+          position:absolute;top:-6px;right:-6px;width:18px;height:18px;
+          background:#dc2626;color:white;border-radius:50%;display:flex;align-items:center;
+          justify-content:center;font-size:11px;cursor:pointer;z-index:20;
+          border:1px solid rgba(255,255,255,0.3);line-height:1;
+        `;
+        removeBtn.textContent = '\u2715';
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm(`Remover "${token.name}" do mapa?`)) {
+            this.removeToken(token.id);
+          }
+        });
+        tokenEl.appendChild(removeBtn);
       }
 
       container.appendChild(tokenEl);
