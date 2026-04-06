@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -c js/auth.js)",
+      "Bash(node -c js/master.js)",
+      "Bash(node -c js/map.js)"
+    ]
+  }
+}

@@ -75,23 +75,29 @@
 
     async function init() {
       await AuthSystem.waitForInitialization();
-      
+
       if (!AuthSystem.isAuthenticated()) {
         window.location.href = 'index.html';
         return;
       }
+
+      // Garante que o perfil existe no Firestore
+      await AuthSystem.saveProfile();
 
       const profile = await AuthSystem.getUserProfile();
       if (profile) {
         document.getElementById('profileNick').value = profile.nick || AuthSystem.currentNick || '';
         document.getElementById('profileClass').value = profile.favoriteClass || '';
         document.getElementById('profileBio').value = profile.bio || '';
-        
+
         if (profile.avatarUrl) {
           updateAvatarPreview(profile.avatarUrl);
         } else {
           document.getElementById('avatarPlaceholder').textContent = (profile.nick || AuthSystem.currentNick || '?')[0].toUpperCase();
         }
+      } else {
+        // Fallback caso o perfil ainda não exista
+        document.getElementById('profileNick').value = AuthSystem.currentNick || '';
       }
     }
 

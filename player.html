@@ -636,6 +636,9 @@
         await SheetSystem.loadOrCreateSheet(roomCode);
         await BattleSystem.initialize();
 
+        // Mostra modal de iniciativa ao jogador quando o mestre iniciar
+        BattleSystem.showPlayerInitiativeModal();
+
         SheetSystem.subscribeToSheet(roomCode, renderSheet);
         ChatSystem.subscribeToChat(roomCode, renderChat);
 
@@ -918,29 +921,51 @@
       const indicator = document.getElementById('battleIndicator');
       const turnIndicator = document.getElementById('turnIndicator');
 
-      if (state?.active) {
+      if (state?.active && state.initiative) {
         indicator.classList.add('active');
         turnIndicator.classList.add('active');
 
         const currentTurn = state.initiative?.find(i => (i.id || i) === state.turn);
-        const name = typeof currentTurn === 'object' ? currentTurn?.name : currentTurn;
+        const currentName = typeof currentTurn === 'object' ? currentTurn?.name : currentTurn;
         const isYourTurn = state.turn === AuthSystem.currentUser?.uid;
 
-        turnIndicator.innerHTML = `
-          <div class="turn-info">
-            <span class="round-badge">Rodada ${state.round || 1}</span>
-            <span class="${isYourTurn ? 'your-turn' : ''}" style="padding: 0.25rem 0.5rem; border-radius: 4px; background: ${isYourTurn ? 'var(--color-accent-green)' : 'var(--color-bg-secondary)'};">
-              ${isYourTurn ? '✨ SUA VEZ!' : `Vez de: ${name || '---'}`}
-            </span>
-          </div>
-        `;
+        // Mostra ordem de iniciativa com numeros de posicao
+        let html = `<div class="turn-info"><span class="round-badge">Rodada ${state.round || 1}</span>`;
+        if (isYourTurn) {
+          html += ` <span style="color:#22c55e;font-weight:bold;">SUA VEZ!</span>`;
+        } else {
+          html += ` <span style="color:#e8c97a;">Vez de: ${currentName || '---'}</span>`;
+        }
+        html += `</div><div style="margin-top:6px;font-size:0.8rem;">`;
+
+        state.initiative.forEach((p, idx) => {
+          const pos = idx + 1;
+          const isCurrent = (p.id || p) === state.turn;
+          const total = p.initiative ?? '?';
+
+          html += `
+            <div style="display:flex;align-items:center;gap:5px;padding:2px 6px;
+              ${isCurrent ? 'background:rgba(212,175,55,0.25);border-radius:4px;' : ''}">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+                border-radius:50%;font-size:0.65rem;font-weight:bold;
+                ${pos === 1 ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">
+                ${pos}
+              </span>
+              <span style="color:#e8d8b0;">${p.name}</span>
+              ${p.dexMod !== undefined && p.dexMod !== null ? `<span style="color:#8a6a1a;font-size:0.65rem;">(DEX ${p.dexMod >= 0 ? '+' : ''}${p.dexMod})</span>` : ''}
+              <span style="margin-left:auto;font-family:monospace;font-size:0.7rem;color:#e8c97a;">${total}</span>
+            </div>`;
+        });
+        html += '</div>';
+
+        turnIndicator.innerHTML = html;
 
         if (isYourTurn) {
           SoundManager.playNotification();
         }
       } else {
-        indicator.classList.remove('active');
-        turnIndicator.classList.remove('active');
+        indicator?.classList.remove('active');
+        turnIndicator?.classList.remove('active');
       }
     }
 

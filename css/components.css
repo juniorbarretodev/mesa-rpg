@@ -49,6 +49,11 @@
   background: #15803d;
 }
 
+.btn-warning {
+  background: #ca8a04;
+  color: white;
+}
+
 .btn-sm {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;

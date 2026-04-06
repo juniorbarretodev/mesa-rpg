@@ -34,6 +34,27 @@ export const AuthSystem = {
     return `${username.toLowerCase().trim()}@mesarpg.com`;
   },
 
+  // Salva/garante o perfil no Firestore (cria se não existir para evitar 404)
+  async saveProfile() {
+    const user = this.currentUser || auth.currentUser;
+    if (!user) return false;
+
+    const profileRef = doc(db, 'users', user.uid);
+    const existing = await getDoc(profileRef);
+
+    const updates = {
+      nick: this.currentNick || user.displayName || user.email?.split('@')[0] || 'Jogador',
+      updatedAt: serverTimestamp()
+    };
+
+    if (!existing.exists()) {
+      updates.createdAt = serverTimestamp();
+    }
+
+    await setDoc(profileRef, updates, { merge: true });
+    return true;
+  },
+
   async register(nick, password) {
     checkInit();
     const email = this.generateFakeEmail(nick);
@@ -100,18 +121,21 @@ export const AuthSystem = {
   },
 
   async updateUserProfile(updates) {
-    checkInit();
     const user = this.currentUser || auth.currentUser;
     if (!user) throw new Error('Usuário não autenticado');
 
-    const profileRef = doc(db, 'users', user.uid);
-    
     // Atualiza o perfil no Firebase Auth também (especialmente o displayName)
     if (updates.nick) {
-      await updateProfile(user, { displayName: updates.nick });
+      try {
+        await updateProfile(user, { displayName: updates.nick });
+      } catch (authErr) {
+        console.warn('AuthProfile update failed (non-critical):', authErr.message);
+      }
       this.currentNick = updates.nick;
     }
 
+    // Salva no Firestore (sempre funciona)
+    const profileRef = doc(db, 'users', user.uid);
     await setDoc(profileRef, {
       ...updates,
       updatedAt: serverTimestamp()
