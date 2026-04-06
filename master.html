@@ -615,6 +615,21 @@
           if (window.DrawSystem.canvas) window.DrawSystem.init();
         }
 
+        // Listener em tempo real para botão "Finalizar Iniciativa"
+        if (RoomSystem.isMaster) {
+          const initRef = ref(rtdb, `rooms/${roomCode}/initiativePhase`);
+          onValue(initRef, (snap) => {
+            const phase = snap.val();
+            const btn = document.getElementById('finalizeInitBtn');
+            if (!btn) return;
+            if (phase && phase.active) {
+              btn.style.display = 'inline-flex';
+            } else {
+              btn.style.display = 'none';
+            }
+          });
+        }
+
         // Habilita o chat após entrar na sala
         const chatInput = document.getElementById('chatInput');
         chatInput.disabled = false;
@@ -748,25 +763,8 @@
     });
 
     // "Finalizar Iniciativa" button — listener em tempo real do Firebase
-    const initPhaseRef = window.firebaseRealtimeDbRef ? null : null; // placeholder
-    let initiativePhaseListener = null;
+    let initiativePhaseRefListener = null;
     const finalizeBtn = document.getElementById('finalizeInitBtn');
-    if (RoomSystem.isMaster && typeof BattleSystem !== 'undefined') {
-      const code = RoomSystem.currentRoomCode;
-      const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
-      onValue(initRef, (snap) => {
-        const phase = snap.val();
-        if (phase && phase.active) {
-          finalizeBtn.style.display = 'inline-flex';
-        } else {
-          finalizeBtn.style.display = 'none';
-          if (initiativePhaseListener) {
-            initiativePhaseListener();
-            initiativePhaseListener = null;
-          }
-        }
-      });
-    }
 
     finalizeBtn.addEventListener('click', async () => {
       await BattleSystem.finalizeInitiative();

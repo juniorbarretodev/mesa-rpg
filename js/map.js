@@ -425,6 +425,9 @@ export const MapSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
 
+    // Remove do estado local primeiro para evitar renderização stale
+    delete this.tokens[tokenId];
+    // Remove do RTDB
     await set(ref(rtdb, `rooms/${code}/map/tokens/${tokenId}`), null);
   },
 
@@ -434,8 +437,15 @@ export const MapSystem = {
 
     container.innerHTML = '';
 
-    Object.values(this.tokens).forEach(token => {
-      const canMove = RoomSystem.isMaster || 
+    Object.entries(this.tokens).forEach(([key, token]) => {
+      // Skip null/undefined entries (can happen after RTDB deletion)
+      if (!token || typeof token !== 'object') return;
+      // Ensure token has an id — if the key IS the id, use it
+      if (!token.id) token.id = key;
+      // Ensure token has a name — skip unnamed tokens
+      if (!token.name || typeof token.name !== 'string') return;
+
+      const canMove = RoomSystem.isMaster ||
         (token.type === TokenTypes.PLAYER && token.ownerId === AuthSystem.currentUser?.uid);
       
       const tokenEl = document.createElement('div');

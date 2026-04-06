@@ -162,20 +162,34 @@ export const BattleSystem = {
 
     try {
       const snap = await getDocs(sheetsRef);
+      const masterUid = RoomSystem.currentRoom?.masterId;
+
+      // Carrega presença RTDB para pegar nicks mais confiáveis
+      const presenceSnap = await new Promise((resolve) => {
+        const presenceRef = ref(rtdb, `rooms/${code}/presence`);
+        onValue(presenceRef, (s) => resolve(s.val()), { onlyOnce: true });
+      });
+
       snap.forEach(docSnap => {
         const s = docSnap.data();
         const uid = docSnap.id;
         // Não inclui o mestre
-        if (uid === RoomSystem.currentRoom?.masterId) return;
-        // Pega o modificador de destreza da ficha (atributo: dexterity ou destreza)
-        const dexVal = s.attributes?.dexterity?.value || s.attributes?.destreza?.value || 0;
-        const dexMod = Math.floor((dexVal - 10) / 2);
+        if (uid === masterUid) return;
+
+        // Pega o modificador de destreza da ficha
+        const dexVal = s.attributes?.dexterity?.value ?? s.attributes?.destreza?.value ?? 0;
+        const dexMod = Math.floor((parseInt(dexVal) - 10) / 2);
+
+        // Nick prioritário: presença > ficha > fallback
+        const nick = presenceSnap?.[uid]?.nick || s.nick || s.name || 'Jogador';
+        const name = s.name || nick || 'Jogador';
+
         players.push({
           id: uid,
-          name: s.name,
-          nick: s.nick,
+          name: name,
+          nick: nick,
           dexMod: dexMod,
-          class: s.class,
+          class: s.class || 'Aventureiro',
           avatarUrl: s.avatarUrl || ''
         });
       });
@@ -194,20 +208,36 @@ export const BattleSystem = {
     const playerId = AuthSystem.currentUser?.uid;
     if (!playerId) return;
 
-    const rollVal = Array.isArray(rollResult) ? rollResult[0] : parseInt(rollResult);
-    if (isNaN(rollVal)) return;
+    // DiceSystem.roll retorna { results: [...] }, mas passamos direto
+    const rollVal = Array.isArray(rollResult) ? rollResult[0] : Array.isArray(rollResult?.results) ? rollResult.results[0] : parseInt(rollResult);
+    if (isNaN(rollVal) || rollVal < 1 || rollVal > 20) {
+      console.warn('Battle: Invalid initiative roll value:', rollResult);
+      return;
+    }
 
     const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
 
     try {
       const snap = await new Promise((resolve) => onValue(initRef, resolve, { onlyOnce: true }));
       const phase = snap.val();
-      if (!phase || !phase.active || !phase.rolls || !phase.rolls[playerId]) {
-        console.warn('Battle: Initiative phase not active or player not found');
+      if (!phase || !phase.active || !phase.rolls) {
+        console.warn('Battle: Initiative phase not active');
+        return;
+      }
+
+      // Se não tem entry para este jogador, pode ser que não foi incluído — ignora silenciosamente
+      if (!phase.rolls[playerId]) {
+        console.warn('Battle: Player not in initiative rolls:', playerId);
         return;
       }
 
       const dexMod = phase.rolls[playerId].dexMod || 0;
+      // Previne double-submission
+      if (phase.rolls[playerId].roll !== null) {
+        console.log('Battle: Player already submitted, skipping');
+        return;
+      }
+
       const total = rollVal + dexMod;
 
       await update(initRef, {
@@ -230,7 +260,9 @@ export const BattleSystem = {
     const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
 
     try {
-      const snap = await new Promise((resolve) => onValue(initRef, resolve, { onlyOnce: true }));
+      const snap = await new Promise((resolve) => {
+        onValue(initRef, (s) => resolve(s), { onlyOnce: true });
+      });
       const phase = snap.val();
 
       if (!phase || !phase.rolls) {
@@ -238,12 +270,25 @@ export const BattleSystem = {
         return;
       }
 
-      const initiativeOrder = Object.values(phase.rolls).sort((a, b) => {
-        if (a.total === null && b.total === null) return 0;
-        if (a.total === null) return 1; // quem nao rolou vai por ultimo
-        if (b.total === null) return -1;
-        return b.total - a.total;
-      });
+      const rolls = Object.values(phase.rolls);
+      if (rolls.length === 0) {
+        console.warn('Battle: No players in initiative');
+        return;
+      }
+
+      const initiativeOrder = rolls
+        .filter(p => p && p.id && p.name) // filtra entradas inválidas
+        .sort((a, b) => {
+          if (a.total === null && b.total === null) return 0;
+          if (a.total === null) return 1; // quem nao rolou vai por ultimo
+          if (b.total === null) return -1;
+          return b.total - a.total;
+        });
+
+      if (initiativeOrder.length === 0) {
+        console.warn('Battle: No valid players after filtering');
+        return;
+      }
 
       // Remove a fase de iniciativa
       await set(initRef, null);
@@ -259,31 +304,40 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
+    // Garante que todos os participantes tenham nome válido
+    const sanitized = initiativeOrder
+      .filter(p => p && p.id)
+      .map(p => ({
+        id: p.id,
+        name: p.name || 'Desconhecido',
+        initiative: p.total ?? 0,
+        type: 'player',
+        roll: p.roll ?? null,
+        dexMod: p.dexMod ?? 0
+      }));
+
+    if (sanitized.length === 0) {
+      console.error('Battle: No valid players to start battle');
+      return;
+    }
+
     await set(ref(rtdb, `rooms/${code}/battleState`), {
       active: true,
       round: 1,
-      turn: initiativeOrder[0]?.id || initiativeOrder[0],
-      initiative: initiativeOrder.map(p => ({
-        id: p.id,
-        name: p.name || 'Desconhecido',
-        initiative: p.total,
-        type: 'player',
-        roll: p.roll,
-        dexMod: p.dexMod
-      })),
+      turn: sanitized[0].id,
+      initiative: sanitized,
       pendingAction: null,
       lastModified: Date.now()
     });
 
     await ChatSystem.sendMessage('⚔️ Batalha iniciada!', 'system');
 
-    // Envia mensagem com a ordem de iniciativa
-    this.initiative = initiativeOrder;
+    this.initiative = sanitized;
     this.turnIndex = 0;
 
     SoundManager.playBattleStart();
 
-    // Fecha modal se estiver aberto
+    // Fecha modais se estiverem abertos
     document.getElementById('initiativeModal')?.remove();
   },
 
@@ -358,24 +412,30 @@ export const BattleSystem = {
     if (!code) return;
 
     const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
+    let modalOpen = false;
 
     onValue(initRef, (snap) => {
       const phase = snap.val();
       if (!phase || !phase.active) {
         document.getElementById('initiativePlayerModal')?.remove();
+        modalOpen = false;
         return;
       }
 
       const playerId = AuthSystem.currentUser?.uid;
-      if (!phase.rolls || !phase.rolls[playerId]) return;
-      if (phase.rolls[playerId].roll !== null) {
-        // Já rolou
-        document.getElementById('initiativePlayerModal')?.remove();
+      if (!phase.rolls || !phase.rolls[playerId]) {
         return;
       }
 
-      const existing = document.getElementById('initiativePlayerModal');
-      if (existing) return; // já está aberto
+      if (phase.rolls[playerId].roll !== null) {
+        // Já rolou — fecha modal
+        document.getElementById('initiativePlayerModal')?.remove();
+        modalOpen = false;
+        return;
+      }
+
+      if (modalOpen) return; // já está aberto
+      modalOpen = true;
 
       const modal = document.createElement('div');
       modal.id = 'initiativePlayerModal';
@@ -401,12 +461,16 @@ export const BattleSystem = {
           const display = document.getElementById('playerInitResult');
           const diceRoll = await DiceSystem.rollWithAnimation('1d20', display, { animate: true });
 
-          await this.submitInitiativeRoll(diceRoll.results);
+          // Passa o objeto completo { results, total, ... } para que submitInitiativeRoll extraia corretamente
+          await this.submitInitiativeRoll({ results: diceRoll.results });
 
-          display.innerHTML = `🎲 ${diceRoll.total}`;
+          // Exibe resultado com modificador
+          const dexMod = phase.rolls[playerId]?.dexMod || 0;
+          const total = diceRoll.results[0] + dexMod;
+          display.innerHTML = `🎲 ${diceRoll.results[0]} <span style="font-size:1.2rem;color:#a08050;">+ ${dexMod} = ${total}</span>`;
           rollBtn.textContent = '✅ Rola registrada!';
 
-          ChatSystem.sendMessage(`rolou iniciativa: 🎲 ${diceRoll.results[0]} + DEX mod`, 'action');
+          ChatSystem.sendMessage(`rolou iniciativa: 🎲 ${diceRoll.results[0]} (DEX ${dexMod >= 0 ? '+' : ''}${dexMod}) → ${total}`, 'action');
         });
       }
     }, { onlyOnce: false });
