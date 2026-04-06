@@ -588,8 +588,8 @@
             }
           },
           onPlayersUpdate: (players) => {
-             // O render logic foi para index ou players, manter original
-          }
+          renderPlayers(players);
+        }
         });
 
         console.log("[Master] Inicializando Chat e Batalha...");
@@ -606,7 +606,11 @@
 
         await MasterSystem.initialize();
         await BattleSystem.initialize();
-        if (window.DrawSystem) window.DrawSystem.init();
+        if (window.DrawSystem) {
+          // Sync DrawSystem to use the drawCanvas MapSystem created in initialize
+          window.DrawSystem.canvas = document.getElementById('drawCanvas');
+          if (window.DrawSystem.canvas) window.DrawSystem.init();
+        }
 
         // Habilita o chat após entrar na sala
         const chatInput = document.getElementById('chatInput');
@@ -715,15 +719,9 @@
       }
     });
 
-    document.getElementById('toggleBattleBtn').addEventListener('click', async () => {
-      await MasterSystem.toggleBattleMode();
-    });
-
     document.getElementById('endSessionBtn').addEventListener('click', async () => {
       await MasterSystem.endSession();
     });
-
-
 
     document.getElementById('loadMapBtn').addEventListener('click', () => {
       const fileInput = document.createElement('input');
@@ -735,19 +733,36 @@
         if (file) {
           MapSystem.uploadMapImage(file);
         }
+        // Remove input only after user finishes selection
+        setTimeout(() => fileInput.remove(), 100);
       });
       document.body.appendChild(fileInput);
       fileInput.click();
-      fileInput.remove();
     });
 
     document.getElementById('toggleGridBtn').addEventListener('click', () => {
       MapSystem.toggleGrid();
     });
 
+    // Toggle battle visual state immediately instead of waiting for Firestore sync
+    document.getElementById('toggleBattleBtn').addEventListener('click', async () => {
+      const result = await MasterSystem.toggleBattleMode();
+      if (result !== undefined) {
+        document.getElementById('battleIndicator').classList.toggle('active', result);
+        const btn = document.getElementById('toggleBattleBtn');
+        if (result) {
+          btn.textContent = '⚔️ Desativar Batalha';
+          btn.classList.remove('btn-success');
+          btn.classList.add('btn-danger');
+        } else {
+          btn.textContent = '⚔️ Ativar Batalha';
+          btn.classList.remove('btn-danger');
+          btn.classList.add('btn-success');
+        }
+      }
+    });
 
-
-    setInterval(() => {
+    const tokenRefreshInterval = setInterval(() => {
       renderTokens();
     }, 2000);
 
@@ -829,6 +844,7 @@
     };
 
     window.addEventListener('beforeunload', () => {
+      clearInterval(tokenRefreshInterval);
       ChatSystem.unsubscribe();
       MapSystem.unsubscribe();
       MasterSystem.cleanup();
