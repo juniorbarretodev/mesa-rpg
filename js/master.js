@@ -50,8 +50,13 @@ export const MasterSystem = {
     const listener = onSnapshot(sheetsRef, (snap) => {
       snap.forEach(doc => {
         const sheet = { id: doc.id, ...doc.data() };
+        const prevSheet = this.playerSheets[doc.id];
+        const avatarChanged = prevSheet && prevSheet.avatarUrl !== sheet.avatarUrl;
         if (doc.id !== AuthSystem.currentUser?.uid) {
           this.playerSheets[doc.id] = sheet;
+        }
+        if (avatarChanged) {
+          this.syncPlayerToken(doc.id);
         }
       });
       this.renderPlayerSheets();
@@ -162,12 +167,17 @@ export const MasterSystem = {
       if (!sheet) return;
       const token = Object.values(MapSystem.tokens || {}).find(t => t.ownerId === playerId);
       if (!token) return;
+      const updates = {};
       if (token.hp !== sheet.hp || token.hpMax !== sheet.hpMax) {
-        MapSystem.updateToken(token.id, {
-          hp: sheet.hp,
-          hpMax: sheet.hpMax,
-          status: sheet.status || []
-        });
+        updates.hp = sheet.hp;
+        updates.hpMax = sheet.hpMax;
+        updates.status = sheet.status || [];
+      }
+      if (token.avatarUrl !== sheet.avatarUrl) {
+        updates.avatarUrl = sheet.avatarUrl || '';
+      }
+      if (Object.keys(updates).length > 0) {
+        MapSystem.updateToken(token.id, updates);
         MapSystem.renderTokens();
       }
     } catch(e) {}

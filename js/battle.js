@@ -257,8 +257,11 @@ export const BattleSystem = {
     const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
 
     try {
-      const snap = await new Promise((resolve) => onValue(initRef, resolve, { onlyOnce: true }));
-      const phase = snap.val();
+      const [phaseSnap, initMods] = await Promise.all([
+        new Promise((resolve) => onValue(initRef, resolve, { onlyOnce: true })),
+        new Promise((resolve) => onValue(ref(rtdb, `rooms/${code}/playerInitMods`), s => resolve(s.val() || {}), { onlyOnce: true }))
+      ]);
+      const phase = phaseSnap.val();
       if (!phase || !phase.active || !phase.rolls) {
         console.warn('Battle: Initiative phase not active');
         return;
@@ -270,18 +273,22 @@ export const BattleSystem = {
         return;
       }
 
-      const dexMod = phase.rolls[playerId].dexMod || 0;
       // Previne double-submission
       if (phase.rolls[playerId].roll !== null) {
         console.log('Battle: Player already submitted, skipping');
         return;
       }
 
-      const total = rollVal + dexMod;
+      // Usa initMod definido pelo player no card; se não tiver, cai no DEX mod
+      const playerInitMod = initMods[playerId]?.mod;
+      const dexMod = phase.rolls[playerId].dexMod || 0;
+      const mod = (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexMod;
+      const total = rollVal + mod;
 
       await update(initRef, {
         [`rolls/${playerId}.roll`]: rollVal,
-        [`rolls/${playerId}.total`]: total
+        [`rolls/${playerId}.total`]: total,
+        [`rolls/${playerId}.initMod`]: mod
       });
 
       SoundManager.playDiceRoll();
@@ -656,16 +663,20 @@ export const BattleSystem = {
       if (!list) return;
 
       const entries = Object.values(phase.rolls);
-      list.innerHTML = entries.map(p => `
+      list.innerHTML = entries.map(p => {
+        const modLabel = p.initMod !== undefined && p.initMod !== null
+          ? `Init: ${p.initMod >= 0 ? '+' : ''}${p.initMod}`
+          : `DEX: +${p.dexMod}`;
+        return `
         <div style="display:flex;align-items:center;gap:10px;padding:8px;margin-bottom:4px;background:#0a0705;border-radius:6px;
           border-left:3px solid ${p.roll !== null ? '#22c55e' : '#666'};">
           <span style="flex:1;color:#e8d8b0;">${p.name}</span>
-          <span style="color:#8a6a1a;font-size:0.75rem;">DEX: +${p.dexMod}</span>
+          <span style="color:#8a6a1a;font-size:0.75rem;">${modLabel}</span>
           <span style="color:#e8c97a;font-family:monospace;min-width:50px;text-align:right;">
-            ${p.roll !== null ? `🎲 ${p.roll} → <strong style="color:#22c55e;font-size:1.1rem;">${p.total}</strong>` : '<em style="color:#666;">Aguardando...</em>'}
+            ${p.roll !== null ? `🎲 ${p.roll} ${modLabel.includes('+') ? '+' : ''}→ <strong style="color:#22c55e;font-size:1.1rem;">${p.total}</strong>` : '<em style="color:#666;">Aguardando...</em>'}
           </span>
         </div>
-      `).join('');
+      `}).join('');
     }, { onlyOnce: false });
 
     const finalizeBtn = document.getElementById('finalizeInitBtn');
@@ -717,43 +728,57 @@ export const BattleSystem = {
       if (modalOpen) return; // já está aberto
       modalOpen = true;
 
-      const modal = document.createElement('div');
-      modal.id = 'initiativePlayerModal';
-      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10000;';
-      modal.innerHTML = `
-        <div style="background:#1a1208;border:2px solid #c9a84c;border-radius:12px;padding:24px;min-width:350px;text-align:center;">
-          <h3 style="color:#e8c97a;margin:0 0 8px;font-family:'Cinzel',serif;">⏱️ Rolar Iniciativa</h3>
-          <p style="color:#a08050;font-size:0.85rem;margin:0 0 16px;">Role 1d20 para definir a ordem de turno!</p>
-          <div id="playerInitResult" style="font-size:2.5rem;color:#e8c97a;margin:12px 0;font-family:monospace;">-</div>
-          <button id="rollInitiativeBtn" style="background:#c9a84c;color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;">
-            🎲 Rolar 1d20
-          </button>
-        </div>
-      `;
-      document.body.appendChild(modal);
-
-      const rollBtn = document.getElementById('rollInitiativeBtn');
-      if (rollBtn) {
-        rollBtn.addEventListener('click', async () => {
-          rollBtn.disabled = true;
-          rollBtn.textContent = 'Rolando...';
-
-          const display = document.getElementById('playerInitResult');
-          const diceRoll = await DiceSystem.rollWithAnimation('1d20', display, { animate: true });
-
-          // Passa o objeto completo { results, total, ... } para que submitInitiativeRoll extraia corretamente
-          await this.submitInitiativeRoll({ results: diceRoll.results });
-
-          // Exibe resultado com modificador
-          const dexMod = phase.rolls[playerId]?.dexMod || 0;
-          const total = diceRoll.results[0] + dexMod;
-          display.innerHTML = `🎲 ${diceRoll.results[0]} <span style="font-size:1.2rem;color:#a08050;">+ ${dexMod} = ${total}</span>`;
-          rollBtn.textContent = '✅ Rola registrada!';
-
-          ChatSystem.sendMessage(`rolou iniciativa: 🎲 ${diceRoll.results[0]} (DEX ${dexMod >= 0 ? '+' : ''}${dexMod}) → ${total}`, 'action');
-        });
-      }
+      // Busca initMods e cria modal com modificador correto
+      this._showPlayerInitModal(code, playerId, phase);
     }, { onlyOnce: false });
+  },
+
+  async _showPlayerInitModal(code, playerId, phase) {
+    const dexMod = phase.rolls[playerId]?.dexMod || 0;
+
+    // Busca initMod do player
+    const initModsSnap = await new Promise((resolve) => {
+      onValue(ref(rtdb, `rooms/${code}/playerInitMods`), s => resolve(s.val() || {}), { onlyOnce: true });
+    });
+    const playerInitMod = initModsSnap[playerId]?.mod;
+    const mod = (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexMod;
+
+    const modal = document.createElement('div');
+    modal.id = 'initiativePlayerModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10000;';
+    modal.innerHTML = `
+      <div style="background:#1a1208;border:2px solid #c9a84c;border-radius:12px;padding:24px;min-width:350px;text-align:center;">
+        <h3 style="color:#e8c97a;margin:0 0 8px;font-family:'Cinzel',serif;">⏱️ Rolar Iniciativa</h3>
+        <p style="color:#a08050;font-size:0.85rem;margin:0 0 4px;">Role 1d20 para definir a ordem de turno!</p>
+        <p style="color:#c9a84c;font-size:0.8rem;margin:0 0 12px;">Modificador: <strong>${mod >= 0 ? '+' : ''}${mod}</strong></p>
+        <div style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:2rem;color:#e8c97a;font-family:monospace;min-height:3rem;" id="playerInitResult">-</div>
+        <button id="rollInitiativeBtn" style="background:#c9a84c;color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;">
+          🎲 Rolar 1d20
+        </button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const rollBtn = document.getElementById('rollInitiativeBtn');
+    if (rollBtn) {
+      rollBtn.addEventListener('click', async () => {
+        rollBtn.disabled = true;
+        rollBtn.textContent = 'Rolando...';
+
+        const display = document.getElementById('playerInitResult');
+        const diceRoll = await DiceSystem.rollWithAnimation('1d20', display, { animate: true });
+
+        await this.submitInitiativeRoll({ results: diceRoll.results });
+
+        const roll = diceRoll.results[0];
+        const total = roll + mod;
+        display.style.fontSize = '1.5rem';
+        display.innerHTML = `<span>🎲</span><span style="font-size:2.5rem;color:#e8c97a;">${roll}</span><span style="font-size:1.2rem;color:#a08050;"> + ${mod >= 0 ? '+' : ''}${mod}</span><span style="font-size:1.2rem;color:#a08050;"> = </span><span style="font-size:2.5rem;color:#22c55e;font-weight:bold;">${total}</span>`;
+        rollBtn.textContent = '✅ Rola registrada!';
+
+        ChatSystem.sendMessage(`rolou iniciativa: 🎲 ${roll} (Mod ${mod >= 0 ? '+' : ''}${mod}) → ${total}`, 'action');
+      });
+    }
   },
 
   async startBattle() {
