@@ -738,6 +738,7 @@
           }, { onlyOnce: true });
         };
 
+        const sheetsRef = collection(db, 'sheets', roomCode, 'players');
         onSnapshot(sheetsRef, allPlayerCardsSub);
 
         // Função global para salvar initMod do player

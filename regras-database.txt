@@ -6,8 +6,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isMaster(roomData) {
-      return request.auth.uid == roomData.masterId;
+    function isMasterOfRoom(roomId) {
+      let room = get(/databases/$(database)/documents/rooms/$(roomId)).data;
+      return room != null && request.auth.uid == room.masterId;
     }
 
     function isRoomPlayer(roomId) {
@@ -30,7 +31,7 @@ service cloud.firestore {
         request.resource.data.masterId == request.auth.uid;
 
       // Só o mestre pode atualizar a sala
-      allow update: if isAuthenticated() && isMaster(resource.data);
+      allow update: if isAuthenticated() && isMasterOfRoom(roomId);
       allow delete: if false;
 
       // Jogadores na sala
@@ -39,27 +40,27 @@ service cloud.firestore {
         // Jogador escreve só o próprio registro, mestre escreve qualquer um
         allow write: if isAuthenticated() &&
           (request.auth.uid == playerId ||
-           isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data));
+           isMasterOfRoom(roomId));
       }
     }
 
     // Fichas dos jogadores
     match /sheets/{roomId}/players/{playerId} {
       allow read: if isAuthenticated() &&
-        (isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data) ||
+        (isMasterOfRoom(roomId) ||
          request.auth.uid == playerId ||
          isRoomPlayer(roomId));
 
       allow write: if isAuthenticated() &&
         (request.auth.uid == playerId ||
-         isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data));
+         isMasterOfRoom(roomId));
     }
 
     // Histórico
     match /history/{roomId}/{sessionId} {
       allow read: if isAuthenticated() && isRoomPlayer(roomId);
       allow write: if isAuthenticated() &&
-        isMaster(get(/databases/$(database)/documents/rooms/$(roomId)).data);
+        isMasterOfRoom(roomId);
     }
   }
 }
