@@ -557,6 +557,11 @@
 
         <section class="main-area">
           <div id="allPlayerCards" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
+          <div id="endTurnWrapper" style="display:none;margin-bottom:8px;text-align:center;">
+            <button id="endTurnBtn" class="btn btn-warning" style="background:#f59e0b;color:#1a1208;border:none;padding:8px 24px;border-radius:6px;font-weight:bold;font-size:0.95rem;cursor:pointer;">
+              ⏭️ Fim da Jogada — Passar a Vez
+            </button>
+          </div>
           <div class="map-viewer" id="mapViewer">
             <div id="mapWrapper" class="map-wrapper">
               <img id="mapImage" class="map-image" style="display: none;">
@@ -994,6 +999,10 @@
         const currentName = typeof currentTurn === 'object' ? currentTurn?.name : currentTurn;
         const isYourTurn = state.turn === AuthSystem.currentUser?.uid;
 
+        // Mostra/esconde o botão de fim de turno
+        const endTurnWrapper = document.getElementById('endTurnWrapper');
+        if (endTurnWrapper) endTurnWrapper.style.display = isYourTurn ? 'block' : 'none';
+
         // Mostra ordem de iniciativa com numeros de posicao
         let html = `<div class="turn-info"><span class="round-badge">Rodada ${state.round || 1}</span>`;
         if (isYourTurn) {
@@ -1031,6 +1040,8 @@
       } else {
         indicator?.classList.remove('active');
         turnIndicator?.classList.remove('active');
+        const endTurnWrapper = document.getElementById('endTurnWrapper');
+        if (endTurnWrapper) endTurnWrapper.style.display = 'none';
       }
     }
 
@@ -1098,6 +1109,17 @@
     document.getElementById('leaveBtn').addEventListener('click', async () => {
       await RoomSystem.leaveRoom(roomCode);
       window.location.href = 'index.html';
+    });
+
+    document.getElementById('endTurnBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('endTurnBtn');
+      btn.disabled = true;
+      btn.textContent = 'Passando a vez...';
+      await BattleSystem.endTurn();
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = '⏭️ Fim da Jogada — Passar a Vez';
+      }, 4000);
     });
 
     const PlayerActions = {

@@ -431,6 +431,7 @@
         <div class="flex gap-md">
           <button class="btn btn-success btn-sm" id="toggleBattleBtn">⚔️ Ativar Batalha</button>
           <button class="btn btn-warning btn-sm" id="finalizeInitBtn" style="display:none;background:#ca8a04;color:white;border:none;">⏱️ Finalizar Iniciativa</button>
+          <button class="btn btn-warning btn-sm" id="masterEndTurnBtn" style="display:none;background:#f59e0b;color:#1a1208;border:none;">⏭️ Fim de Turno</button>
           <button class="btn btn-danger btn-sm" id="endSessionBtn">Encerrar</button>
         </div>
       </div>
@@ -781,12 +782,27 @@
           btn.textContent = '⚔️ Desativar Batalha';
           btn.classList.remove('btn-success');
           btn.classList.add('btn-danger');
+          // Mostra botão de fim de turno quando batalha ativa
+          document.getElementById('masterEndTurnBtn').style.display = 'inline-block';
         } else {
           btn.textContent = '⚔️ Ativar Batalha';
           btn.classList.remove('btn-danger');
           btn.classList.add('btn-success');
+          // Esconde botão de fim de turno quando batalha inativa
+          document.getElementById('masterEndTurnBtn').style.display = 'none';
         }
       }
+    });
+
+    document.getElementById('masterEndTurnBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('masterEndTurnBtn');
+      btn.disabled = true;
+      btn.textContent = 'Passando...';
+      await BattleSystem.endTurn();
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = '⏭️ Fim de Turno';
+      }, 4000);
     });
 
     const tokenRefreshInterval = setInterval(() => {

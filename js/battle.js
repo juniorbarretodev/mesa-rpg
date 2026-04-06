@@ -187,7 +187,7 @@ export const BattleSystem = {
     SoundManager.playBattleStart();
   },
 
-  // Retorna jogadores da sala com dados da ficha (incluindo DEX mod e initMod do player card)
+  // Retorna jogadores da sala com dados da ficha (inclui initMod do player card)
   async getRoomPlayers() {
     const code = RoomSystem.currentRoomCode;
     if (!code) return [];
@@ -247,7 +247,6 @@ export const BattleSystem = {
     const playerId = AuthSystem.currentUser?.uid;
     if (!playerId) return;
 
-    // DiceSystem.roll retorna { results: [...] }, mas passamos direto
     const rollVal = Array.isArray(rollResult) ? rollResult[0] : Array.isArray(rollResult?.results) ? rollResult.results[0] : parseInt(rollResult);
     if (isNaN(rollVal) || rollVal < 1 || rollVal > 20) {
       console.warn('Battle: Invalid initiative roll value:', rollResult);
@@ -267,7 +266,6 @@ export const BattleSystem = {
         return;
       }
 
-      // Se não tem entry para este jogador, pode ser que não foi incluído — ignora silenciosamente
       if (!phase.rolls[playerId]) {
         console.warn('Battle: Player not in initiative rolls:', playerId);
         return;
@@ -279,7 +277,7 @@ export const BattleSystem = {
         return;
       }
 
-      // Usa initMod definido pelo player no card; se não tiver, cai no DEX mod
+      // Sempre usa o initMod do RTDB (definido pelo jogador no card); fallback para DEX
       const playerInitMod = initMods[playerId]?.mod;
       const dexMod = phase.rolls[playerId].dexMod || 0;
       const mod = (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexMod;
@@ -288,7 +286,7 @@ export const BattleSystem = {
       await update(initRef, {
         [`rolls/${playerId}.roll`]: rollVal,
         [`rolls/${playerId}.total`]: total,
-        [`rolls/${playerId}.initMod`]: mod
+        [`rolls/${playerId}.mod`]: mod
       });
 
       SoundManager.playDiceRoll();
@@ -304,13 +302,15 @@ export const BattleSystem = {
     if (!code || !RoomSystem.isMaster) return;
 
     try {
-      // Pega player rolls e initiativeOrder em paralelo
-      const [phaseData, orderData] = await Promise.all([
+      const [phaseData, orderData, initMods] = await Promise.all([
         new Promise((resolve) => {
           onValue(ref(rtdb, `rooms/${code}/initiativePhase`), (s) => resolve(s.val()), { onlyOnce: true });
         }),
         new Promise((resolve) => {
           onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => resolve(s.val() || []), { onlyOnce: true });
+        }),
+        new Promise((resolve) => {
+          onValue(ref(rtdb, `rooms/${code}/playerInitMods`), (s) => resolve(s.val() || {}), { onlyOnce: true });
         })
       ]);
 
@@ -319,22 +319,20 @@ export const BattleSystem = {
         return;
       }
 
-      // Mescla: players com rolls finais + NPCs já rolados
-      const finalOrder = [];
-
-      // Players: atualiza rolls do phase no order
+      // Rebuild final order from scratch using orderData + phase rolls
       const orderItems = orderData || [];
-      if (phaseData?.rolls) {
-        orderItems.forEach(item => {
-          if (item.type === 'player' && phaseData.rolls[item.id]?.roll !== null) {
-            item.roll = phaseData.rolls[item.id].roll;
-            item.total = phaseData.rolls[item.id].total;
-          }
-          finalOrder.push(item);
-        });
-      } else {
-        finalOrder.push(...orderItems);
-      }
+      const finalOrder = orderItems.map(item => {
+        if (item.type === 'player' && phaseData?.rolls?.[item.id]?.roll !== null) {
+          const phaseRoll = phaseData.rolls[item.id];
+          return {
+            ...item,
+            roll: phaseRoll.roll,
+            total: phaseRoll.total,
+            mod: phaseRoll.mod !== undefined ? phaseRoll.mod : (phaseRoll.total - phaseRoll.roll)
+          };
+        }
+        return item;
+      });
 
       // Ordena por total (decrescente), null por último
       finalOrder.sort((a, b) => {
@@ -352,6 +350,9 @@ export const BattleSystem = {
       // Limpa phase e salva ordem final
       await set(ref(rtdb, `rooms/${code}/initiativePhase`), null);
       await set(ref(rtdb, `rooms/${code}/initiativeOrder`), finalOrder);
+
+      // Delay de 3s para evitar conflitos de comunicação
+      await new Promise(r => setTimeout(r, 3000));
 
       // Inicia a batalha
       await this.startBattleWithInitiative(finalOrder);
@@ -372,7 +373,7 @@ export const BattleSystem = {
         initiative: p.total ?? 0,
         type: p.type || 'player',
         roll: p.roll ?? null,
-        dexMod: p.dexMod ?? 0,
+        dexMod: p.mod ?? p.dexMod ?? 0,
         npcCardId: p.npcCardId || null,
         avatarUrl: p.avatarUrl || ''
       }));
@@ -417,7 +418,7 @@ export const BattleSystem = {
         initiative: p.total ?? 0,
         type: p.type || 'player',
         roll: p.roll ?? null,
-        dexMod: p.dexMod ?? 0,
+        dexMod: p.mod ?? p.dexMod ?? 0,
         npcCardId: p.npcCardId || null,
         avatarUrl: p.avatarUrl || ''
       })));
@@ -664,8 +665,8 @@ export const BattleSystem = {
 
       const entries = Object.values(phase.rolls);
       list.innerHTML = entries.map(p => {
-        const modLabel = p.initMod !== undefined && p.initMod !== null
-          ? `Init: ${p.initMod >= 0 ? '+' : ''}${p.initMod}`
+        const modLabel = p.mod !== undefined && p.mod !== null
+          ? `Init: ${p.mod >= 0 ? '+' : ''}${p.mod}`
           : `DEX: +${p.dexMod}`;
         return `
         <div style="display:flex;align-items:center;gap:10px;padding:8px;margin-bottom:4px;background:#0a0705;border-radius:6px;
@@ -845,9 +846,21 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
 
-    await set(ref(rtdb, `rooms/${code}/battleState`), null);
+    // Delay de 3s para evitar conflitos de comunicação
+    await new Promise(r => setTimeout(r, 3000));
+
+    // Limpa TUDO — reset completo para nova batalha
+    await set(ref(rtdb, `rooms/${code}/battleState`), {
+      active: false,
+      round: 0,
+      turn: null,
+      initiative: [],
+      pendingAction: null,
+      lastModified: Date.now()
+    });
     await set(ref(rtdb, `rooms/${code}/initiativePhase`), null);
-    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), null);
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), []);
+
     await ChatSystem.sendMessage('🏆 **BATALHA ENCERRADA!** A situação foi resolvida.', 'system');
 
     this.battleState = null;
@@ -860,21 +873,41 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code || !this.battleState?.active) return;
 
+    // Delay de 3s para evitar conflitos de comunicação
+    await new Promise(r => setTimeout(r, 3000));
+
     this.turnIndex++;
 
+    // Ciclo: ao chegar no último, volta ao primeiro e incrementa rodada
     if (this.turnIndex >= this.battleState.initiative.length) {
       this.turnIndex = 0;
-      await update(ref(rtdb, `rooms/${code}/battleState`), {
-        round: (this.battleState.round || 1) + 1
-      });
-      await ChatSystem.sendMessage(`🔄 **Rodada ${this.battleState.round + 1}** começou!`, 'system');
     }
 
-    const nextTurn = this.battleState.initiative[this.turnIndex];
+    const newRound = this.battleState.round || 1;
+    // Se voltou ao primeiro, nova rodada
+    const prevTurnIndex = this.turnIndex === 0
+      ? this.battleState.initiative.length - 1
+      : this.turnIndex - 1;
 
     await update(ref(rtdb, `rooms/${code}/battleState`), {
-      turn: nextTurn?.id || nextTurn
+      turn: this.battleState.initiative[this.turnIndex]?.id,
+      round: newRound
     });
+  },
+
+  // Fim de turno — chamado pelo jogador (se for sua vez) ou pelo mestre
+  async endTurn() {
+    const code = RoomSystem.currentRoomCode;
+    if (!code || !this.battleState?.active) return;
+
+    // Verifica permissão: dono do turno ou mestre
+    const currentTurnParticipant = this.battleState.initiative[this.turnIndex];
+    const isMyTurn = currentTurnParticipant?.id === AuthSystem.currentUser?.uid;
+    const isMaster = RoomSystem.isMaster;
+
+    if (!isMyTurn && !isMaster) return;
+
+    await this.nextTurn();
   },
 
   parsePlayerAction(message, playerId) {
