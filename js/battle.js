@@ -11,6 +11,7 @@ import { ChatSystem, BATTLE_PHASES } from './chat.js';
 export const BattleSystem = {
   battleState: null,
   listeners: [],
+  initiativeListeners: [],
   playerAbilities: {}, // Mantido por compatibilidade
   participantsData: {}, // Cache completo das fichas (HP, recursos, etc)
   currentTurn: null,
@@ -21,6 +22,9 @@ export const BattleSystem = {
   async initialize() {
     await this.subscribeToBattleState();
     await this.loadParticipantsData();
+    if (RoomSystem.isMaster) {
+      this.subscribeToInitiativeOrder();
+    }
   },
 
   async loadParticipantsData() {
@@ -112,47 +116,78 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
-    // Coleta todos os jogadores da sala (não incluindo o mestre)
+    // Coleta jogadores + NPCs do mapa
     const players = await this.getRoomPlayers();
-    if (!players || players.length === 0) {
-      alert('Nenhum jogador na sala para rolar iniciativa.');
+    const npcTokens = Object.values(MapSystem.tokens || {}).filter(
+      t => t.type === 'enemy' || t.type === 'npc' || t.type === 'friendly'
+    );
+
+    if (players.length === 0 && npcTokens.length === 0) {
+      alert('Nenhum jogador ou NPC para rolar iniciativa.');
       return;
     }
 
-    const initiativeRolls = {};
+    // Cria initiativeOrder: players (roll null) + NPCs (auto roll)
+    const initiativeOrder = [];
+
     players.forEach(p => {
-      const dexMod = p.dexMod || 0;
-      initiativeRolls[p.id] = {
+      initiativeOrder.push({
         id: p.id,
-        name: p.name || p.nick,
-        dexMod: dexMod,
-        roll: null, // ainda não rolou
-        total: null // roll + dexMod
+        name: p.name,
+        type: 'player',
+        dexMod: p.dexMod || 0,
+        roll: null,
+        total: null,
+        avatarUrl: p.avatarUrl || ''
+      });
+    });
+
+    // NPCs auto-rolam 1d20
+    npcTokens.forEach(token => {
+      const roll = Math.floor(Math.random() * 20) + 1;
+      initiativeOrder.push({
+        id: token.id,
+        name: token.name,
+        type: 'npc',
+        dexMod: 0,
+        roll: roll,
+        total: roll,
+        npcCardId: token.npcCardId || null,
+        avatarUrl: token.avatarUrl || ''
+      });
+    });
+
+    // Salva initiativeOrder no RTDB
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), initiativeOrder);
+
+    // Guarda phase.rolls apenas para players rolarem manualmente
+    const playerRolls = {};
+    players.forEach(p => {
+      playerRolls[p.id] = {
+        id: p.id,
+        name: p.name,
+        dexMod: p.dexMod || 0,
+        roll: null,
+        total: null
       };
     });
 
-    // Salva no Firebase
     await set(ref(rtdb, `rooms/${code}/initiativePhase`), {
       active: true,
-      rolls: initiativeRolls,
+      rolls: playerRolls,
       startedAt: Date.now(),
       startedBy: AuthSystem.currentUser?.uid
     });
 
     await ChatSystem.sendMessage(
-      '⏱️ Fase de Iniciativa começou! Todos os jogadores devem rolar 1d20 para definir a ordem de turno.',
+      '⏱️ Iniciativa! Jogadores rolem 1d20. NPCs já rolaram automaticamente.',
       'system'
     );
 
     SoundManager.playBattleStart();
-
-    // Exibe modal ao mestre
-    if (RoomSystem.isMaster) {
-      this.showInitiativeTrackerModal();
-    }
   },
 
-  // Retorna jogadores da sala com dados da ficha (incluindo DEX mod)
+  // Retorna jogadores da sala com dados da ficha (incluindo DEX mod e initMod do player card)
   async getRoomPlayers() {
     const code = RoomSystem.currentRoomCode;
     if (!code) return [];
@@ -164,31 +199,35 @@ export const BattleSystem = {
       const snap = await getDocs(sheetsRef);
       const masterUid = RoomSystem.currentRoom?.masterId;
 
-      // Carrega presença RTDB para pegar nicks mais confiáveis
-      const presenceSnap = await new Promise((resolve) => {
-        const presenceRef = ref(rtdb, `rooms/${code}/presence`);
-        onValue(presenceRef, (s) => resolve(s.val()), { onlyOnce: true });
-      });
+      // Carrega presença e initMods em paralelo
+      const [presenceSnap, initMods] = await Promise.all([
+        new Promise((resolve) => {
+          onValue(ref(rtdb, `rooms/${code}/presence`), (s) => resolve(s.val()), { onlyOnce: true });
+        }),
+        new Promise((resolve) => {
+          onValue(ref(rtdb, `rooms/${code}/playerInitMods`), (s) => resolve(s.val() || {}), { onlyOnce: true });
+        })
+      ]);
 
       snap.forEach(docSnap => {
         const s = docSnap.data();
         const uid = docSnap.id;
-        // Não inclui o mestre
         if (uid === masterUid) return;
 
-        // Pega o modificador de destreza da ficha
         const dexVal = s.attributes?.dexterity?.value ?? s.attributes?.destreza?.value ?? 0;
         const dexMod = Math.floor((parseInt(dexVal) - 10) / 2);
 
-        // Nick prioritário: presença > ficha > fallback
+        // initMod do player card sobrepõe DEX mod
+        const initMod = initMods?.[uid]?.mod;
+        const finalMod = initMod !== undefined && initMod !== null ? initMod : dexMod;
+
         const nick = presenceSnap?.[uid]?.nick || s.nick || s.name || 'Jogador';
-        const name = s.name || nick || 'Jogador';
 
         players.push({
           id: uid,
-          name: name,
+          name: s.name || nick || 'Jogador',
           nick: nick,
-          dexMod: dexMod,
+          dexMod: finalMod,
           class: s.class || 'Aventureiro',
           avatarUrl: s.avatarUrl || ''
         });
@@ -257,44 +296,58 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
-    const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
-
     try {
-      const snap = await new Promise((resolve) => {
-        onValue(initRef, (s) => resolve(s), { onlyOnce: true });
-      });
-      const phase = snap.val();
+      // Pega player rolls e initiativeOrder em paralelo
+      const [phaseData, orderData] = await Promise.all([
+        new Promise((resolve) => {
+          onValue(ref(rtdb, `rooms/${code}/initiativePhase`), (s) => resolve(s.val()), { onlyOnce: true });
+        }),
+        new Promise((resolve) => {
+          onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => resolve(s.val() || []), { onlyOnce: true });
+        })
+      ]);
 
-      if (!phase || !phase.rolls) {
+      if (!phaseData?.rolls && !orderData?.length) {
         console.warn('Battle: No initiative data to finalize');
         return;
       }
 
-      const rolls = Object.values(phase.rolls);
-      if (rolls.length === 0) {
-        console.warn('Battle: No players in initiative');
-        return;
-      }
+      // Mescla: players com rolls finais + NPCs já rolados
+      const finalOrder = [];
 
-      const initiativeOrder = rolls
-        .filter(p => p && p.id && p.name) // filtra entradas inválidas
-        .sort((a, b) => {
-          if (a.total === null && b.total === null) return 0;
-          if (a.total === null) return 1; // quem nao rolou vai por ultimo
-          if (b.total === null) return -1;
-          return b.total - a.total;
+      // Players: atualiza rolls do phase no order
+      const orderItems = orderData || [];
+      if (phaseData?.rolls) {
+        orderItems.forEach(item => {
+          if (item.type === 'player' && phaseData.rolls[item.id]?.roll !== null) {
+            item.roll = phaseData.rolls[item.id].roll;
+            item.total = phaseData.rolls[item.id].total;
+          }
+          finalOrder.push(item);
         });
+      } else {
+        finalOrder.push(...orderItems);
+      }
 
-      if (initiativeOrder.length === 0) {
-        console.warn('Battle: No valid players after filtering');
+      // Ordena por total (decrescente), null por último
+      finalOrder.sort((a, b) => {
+        if (a.total === null && b.total === null) return 0;
+        if (a.total === null) return 1;
+        if (b.total === null) return -1;
+        return b.total - a.total;
+      });
+
+      if (finalOrder.length === 0) {
+        console.warn('Battle: No valid participants');
         return;
       }
 
-      // Remove a fase de iniciativa
-      await set(initRef, null);
+      // Limpa phase e salva ordem final
+      await set(ref(rtdb, `rooms/${code}/initiativePhase`), null);
+      await set(ref(rtdb, `rooms/${code}/initiativeOrder`), finalOrder);
 
-      // Inicia a batalha com a ordem de iniciativa definida
-      await this.startBattleWithInitiative(initiativeOrder);
+      // Inicia a batalha
+      await this.startBattleWithInitiative(finalOrder);
     } catch (e) {
       console.error('Battle: Error finalizing initiative:', e);
     }
@@ -304,20 +357,21 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
-    // Garante que todos os participantes tenham nome válido
     const sanitized = initiativeOrder
-      .filter(p => p && p.id)
+      .filter(p => p && p.id && p.name)
       .map(p => ({
         id: p.id,
-        name: p.name || 'Desconhecido',
+        name: p.name,
         initiative: p.total ?? 0,
-        type: 'player',
+        type: p.type || 'player',
         roll: p.roll ?? null,
-        dexMod: p.dexMod ?? 0
+        dexMod: p.dexMod ?? 0,
+        npcCardId: p.npcCardId || null,
+        avatarUrl: p.avatarUrl || ''
       }));
 
     if (sanitized.length === 0) {
-      console.error('Battle: No valid players to start battle');
+      console.error('Battle: No valid participants to start battle');
       return;
     }
 
@@ -334,11 +388,237 @@ export const BattleSystem = {
 
     this.initiative = sanitized;
     this.turnIndex = 0;
-
     SoundManager.playBattleStart();
 
-    // Fecha modais se estiverem abertos
     document.getElementById('initiativeModal')?.remove();
+  },
+
+  // ── PAINEL DE INICIATIVA DRAGGABLE (MESTRE) ─────────
+
+  // Subescreve a ordem de iniciativa via drag & drop
+  async reorderInitiative(order) {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), order);
+
+    // Atualiza battleState se a batalha já estiver ativa
+    const battleState = this.battleState;
+    if (battleState?.active) {
+      await update(ref(rtdb, `rooms/${code}/battleState/initiative`), order.map(p => ({
+        id: p.id,
+        name: p.name,
+        initiative: p.total ?? 0,
+        type: p.type || 'player',
+        roll: p.roll ?? null,
+        dexMod: p.dexMod ?? 0,
+        npcCardId: p.npcCardId || null,
+        avatarUrl: p.avatarUrl || ''
+      })));
+
+      // Se o turno atual mudou de posição, ajusta turnIndex
+      if (battleState.turn) {
+        const newIdx = order.findIndex(p => p.id === battleState.turn);
+        if (newIdx >= 0) this.turnIndex = newIdx;
+      }
+    }
+  },
+
+  // Adiciona NPC à iniciativa com roll automático
+  async addNpcToInitiative(npcId) {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+
+    // Tenta pegar do MasterSystem, senão do mapa
+    let npc = null;
+    if (window.MasterSystem?.npcCards?.[npcId]) {
+      npc = window.MasterSystem.npcCards[npcId];
+    }
+
+    if (!npc) {
+      const token = Object.values(MapSystem.tokens || {}).find(t => t.npcCardId === npcId);
+      if (token) npc = token;
+    }
+
+    if (!npc) return;
+
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const entry = {
+      id: npc.id || `npc_init_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name: npc.name,
+      type: 'npc',
+      dexMod: 0,
+      roll: roll,
+      total: roll,
+      npcCardId: npcId,
+      avatarUrl: npc.avatarUrl || ''
+    };
+
+    // Adiciona ao initiativeOrder no RTDB
+    const orderSnap = await new Promise((resolve) => {
+      onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => resolve(s.val() || []), { onlyOnce: true });
+    });
+
+    orderSnap.push(entry);
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), orderSnap);
+
+    // Se batalha ativa, atualiza battleState.initiative também
+    if (this.battleState?.active) {
+      await set(ref(rtdb, `rooms/${code}/battleState/initiative`), orderSnap);
+    }
+  },
+
+  subscribeToInitiativeOrder() {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+
+    const orderRef = ref(rtdb, `rooms/${code}/initiativeOrder`);
+    const listener = onValue(orderRef, (snap) => {
+      const order = snap.val();
+      if (order && Array.isArray(order)) {
+        this.renderInitiativePanel(order);
+      } else {
+        // Remove painel se iniciativa não existe
+        document.getElementById('initiativePanel')?.remove();
+      }
+    });
+
+    this.initiativeListeners.push({ ref: orderRef, listener });
+  },
+
+  renderInitiativePanel(order) {
+    const container = document.getElementById('initiativePanel');
+    if (!container) {
+      // Cria painel se não existe
+      this.createInitiativePanel();
+      this.renderInitiativePanel(order);
+      return;
+    }
+
+    const list = container.querySelector('.initiative-list');
+    if (!list) return;
+
+    if (!order.length) {
+      list.innerHTML = '<p class="text-muted" style="font-size:0.8rem;padding:8px;">Nenhum participante</p>';
+      return;
+    }
+
+    list.innerHTML = order.map((p, idx) => {
+      const pos = idx + 1;
+      const isFirst = pos === 1;
+      const roll = p.roll ?? '?';
+      const modStr = p.dexMod >= 0 ? `+${p.dexMod}` : `${p.dexMod}`;
+      const total = p.total ?? '';
+      const typeLabel = p.type === 'npc' ? '🔴' : '';
+
+      return `
+        <div class="initiative-item" draggable="true" data-idx="${idx}"
+          style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin:3px 0;background:#0a0705;
+            border-radius:6px;border-left:3px solid ${isFirst ? '#c9a84c' : '#333'};
+            cursor:grab;user-select:none;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+            border-radius:50%;font-size:0.7rem;font-weight:bold;flex-shrink:0;
+            ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">
+            ${pos}
+          </span>
+          <span style="flex:1;color:#e8d8b0;font-size:0.8rem;font-family:'Cinzel',serif;">
+            ${typeLabel} ${p.name}
+          </span>
+          <span style="color:#a08050;font-size:0.7rem;font-family:monospace;">
+            ${roll} ${modStr} = ${total}
+          </span>
+          <button class="remove-init-btn" data-idx="${idx}"
+            style="background:none;border:none;color:#666;cursor:pointer;font-size:0.75rem;margin-left:4px;">✕</button>
+        </div>
+      `;
+    }).join('');
+
+    // Setup drag events
+    list.querySelectorAll('.initiative-item').forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', item.dataset.idx);
+        item.style.opacity = '0.4';
+      });
+      item.addEventListener('dragend', () => {
+        item.style.opacity = '1';
+      });
+    });
+
+    list.addEventListener('dragover', (e) => { e.preventDefault(); });
+
+    list.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+      const targetItem = e.target.closest('.initiative-item');
+      if (!targetItem) return;
+      const toIdx = parseInt(targetItem.dataset.idx);
+      if (isNaN(fromIdx) || isNaN(toIdx)) return;
+
+      const newOrder = [...order];
+      const [moved] = newOrder.splice(fromIdx, 1);
+      newOrder.splice(toIdx, 0, moved);
+
+      this.reorderInitiative(newOrder);
+    });
+
+    // Remove NPC button
+    list.querySelectorAll('.remove-init-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx);
+        const newOrder = [...order];
+        newOrder.splice(idx, 1);
+        await this.reorderInitiative(newOrder);
+      });
+    });
+  },
+
+  createInitiativePanel() {
+    if (!RoomSystem.isMaster) return;
+    const sidebar = document.querySelector('.sidebar-right');
+    if (!sidebar) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'initiativePanel';
+    panel.innerHTML = `
+      <div class="panel">
+        <h3 class="panel-title">⚔️ Iniciativa</h3>
+        <div class="initiative-list"></div>
+        <div id="npcInitDropdown" style="margin-top:8px;display:flex;gap:4px;align-items:center;">
+          <select id="npcInitSelect" style="flex:1;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:4px;border-radius:3px;font-size:0.7rem;">
+            <option value="">+ Adicionar NPC</option>
+          </select>
+          <button id="addNpcInitBtn" style="background:#c9a84c;border:none;color:white;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">OK</button>
+        </div>
+      </div>
+    `;
+
+    // Insert before the first panel in sidebar
+    sidebar.insertBefore(panel, sidebar.querySelector('.panel'));
+
+    // Wire up the add NPC button
+    document.getElementById('addNpcInitBtn')?.addEventListener('click', () => {
+      const select = document.getElementById('npcInitSelect');
+      if (select?.value) {
+        this.addNpcToInitiative(select.value);
+        select.value = '';
+      }
+    });
+  },
+
+  // Atualiza dropdown de NPCs no painel de iniciativa
+  updateInitiativeNpcDropdown() {
+    const select = document.getElementById('npcInitSelect');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">+ Adicionar NPC</option>';
+    if (window.MasterSystem?.npcCards) {
+      Object.values(window.MasterSystem.npcCards).forEach(npc => {
+        const opt = document.createElement('option');
+        opt.value = npc.id;
+        opt.textContent = npc.name;
+        select.appendChild(opt);
+      });
+    }
   },
 
   // Exibe modal ao mestre com tracking da iniciativa
@@ -480,15 +760,23 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
-    // Primeiro inicia a fase de iniciativa
+    // Inicia a fase de iniciativa (players + auto-roll NPCs)
     await this.startInitiativePhase();
 
-    // Depois faz o roll de iniciativa para tokens no mapa (NPCs, etc)
-    const participants = await this.rollInitiative();
-    const battleRef = ref(rtdb, `rooms/${code}/battleState`);
+    // Exibe painel de iniciativa draggable
+    const orderSnap = await new Promise((resolve) => {
+      onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => resolve(s.val() || []), { onlyOnce: true });
+    });
+    this.renderInitiativePanel(orderSnap);
+    this.updateInitiativeNpcDropdown();
 
-    // Aguarda a fase de iniciativa antes de definir battleState final
-    // battleState é definido em finalizeInitiative
+    // Atualiza dropdown periodicamente quando NPCs mudam
+    const updateInterval = setInterval(() => {
+      this.updateInitiativeNpcDropdown();
+    }, 3000);
+
+    // Guarda intervalo para cleanup
+    this._npcUpdateInterval = updateInterval;
   },
 
   async rollInitiative() {
@@ -533,8 +821,8 @@ export const BattleSystem = {
     if (!code) return;
 
     await set(ref(rtdb, `rooms/${code}/battleState`), null);
-    // Limpa também a fase de iniciativa se existir
     await set(ref(rtdb, `rooms/${code}/initiativePhase`), null);
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), null);
     await ChatSystem.sendMessage('🏆 **BATALHA ENCERRADA!** A situação foi resolvida.', 'system');
 
     this.battleState = null;

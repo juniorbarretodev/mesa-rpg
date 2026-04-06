@@ -1,0 +1,54 @@
+{
+  "rules": {
+    "rooms": {
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+
+        "chat": {
+          "$messageId": {
+            ".write": "auth != null"
+          }
+        },
+
+        "dice": {
+          "$rollId": {
+            ".write": "auth != null"
+          }
+        },
+
+        "map": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid == root.child('rooms').child($roomId).child('masterId').val()"
+        },
+
+        "presence": {
+          "$playerId": {
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid == $playerId"
+          }
+        },
+
+        "battleState": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid == root.child('rooms').child($roomId).child('masterId').val()"
+        },
+
+        "initiativePhase": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+
+        "initiativeOrder": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid == root.child('rooms').child($roomId).child('masterId').val()"
+        },
+
+        "playerInitMods": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { doc, updateDoc, onSnapshot, collection } from "firebase/firestore";
-import { db } from './firebase.js';
+import { ref, onValue, set } from "firebase/database";
+import { rtdb, db } from './firebase.js';
 import { AuthSystem } from './auth.js';
 import { RoomSystem } from './room.js';
 import { MapSystem, TokenTypes } from './map.js';
@@ -8,6 +9,7 @@ import { SoundManager } from './sounds.js';
 
 export const MasterSystem = {
   playerSheets: {},
+  playerInitMods: {},
   listeners: [],
   npcTemplates: [
     { name: 'Orc', hp: 30, type: TokenTypes.ENEMY, color: '#dc2626' },
@@ -25,6 +27,18 @@ export const MasterSystem = {
       return;
     }
     await this.subscribeToPlayerSheets();
+    await this.subscribeToPlayerInitMods();
+  },
+
+  async subscribeToPlayerInitMods() {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+
+    const listener = onValue(ref(rtdb, `rooms/${code}/playerInitMods`), (snap) => {
+      this.playerInitMods = snap.val() || {};
+    });
+
+    this.listeners.push({ ref: `rooms/${code}/playerInitMods`, listener, type: 'rtdb' });
   },
 
   async subscribeToPlayerSheets() {

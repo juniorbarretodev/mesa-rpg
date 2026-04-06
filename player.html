@@ -593,7 +593,8 @@
 
   <script type="module">
     import { collection, onSnapshot } from "firebase/firestore";
-    import { db } from './js/firebase.js';
+    import { ref as dbRef, onValue as onRtdbValue, set } from "firebase/database";
+    import { db, rtdb } from './js/firebase.js';
     import { AuthSystem } from './js/auth.js';
     import { RoomSystem } from './js/room.js';
     import { ChatSystem } from './js/chat.js';
@@ -642,45 +643,108 @@
         SheetSystem.subscribeToSheet(roomCode, renderSheet);
         ChatSystem.subscribeToChat(roomCode, renderChat);
 
-        const sheetsRef = collection(db, 'sheets', roomCode, 'players');
-        onSnapshot(sheetsRef, (snap) => {
+        // Carrega initMods em tempo real
+        const allPlayerCardsSub = (snap) => {
           const container = document.getElementById('allPlayerCards');
           if (!container) return;
           container.innerHTML = '';
-          snap.forEach(docSnap => {
-            const s = docSnap.data();
-            const hpPct = Math.max(0, Math.min(100, ((s.hp||0)/(s.hpMax||20))*100));
-            const isMe = docSnap.id === AuthSystem.currentUser?.uid;
-            const av = s.avatarUrl
-              ? `<img src="${s.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
-              : `<span style="font-size:1.2rem;">${s.name?.[0]?.toUpperCase()||'?'}</span>`;
-            
-            const card = document.createElement('div');
-            card.style.cssText = `
-              background:#1a1208;border:2px solid ${isMe?'#c9a84c':'#4a3820'};
-              border-radius:6px;padding:8px;width:120px;flex-shrink:0;
-            `;
-            card.innerHTML = `
-              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-                <div style="width:32px;height:32px;border-radius:50%;border:1px solid #8a6a1a;
-                  background:#0a0705;overflow:hidden;display:flex;align-items:center;
-                  justify-content:center;flex-shrink:0;">${av}</div>
-                <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#e8c97a;
-                  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                  ${s.name || '?'} ${isMe ? '(você)' : ''}
+
+          // Lê initMods uma vez
+          onRtdbValue(dbRef(rtdb, `rooms/${roomCode}/playerInitMods`), (initSnap) => {
+            const initMods = initSnap.val() || {};
+
+            snap.forEach(docSnap => {
+              const s = docSnap.data();
+              const playerId = docSnap.id;
+              const hpPct = Math.max(0, Math.min(100, ((s.hp || 0) / (s.hpMax || 20)) * 100));
+              const isMe = playerId === AuthSystem.currentUser?.uid;
+              const avatarUrl = s.avatarUrl || '';
+              const initMod = initMods[playerId]?.mod ?? 0;
+
+              const av = avatarUrl
+                ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">`
+                : `<span style="font-size:1.2rem;">${s.name?.[0]?.toUpperCase() || '?'}</span>`;
+
+              const card = document.createElement('div');
+              card.id = `player-card-${playerId}`;
+              card.style.cssText = `
+                background:#1a1208;border:2px solid ${isMe ? '#c9a84c' : '#4a3820'};
+                border-radius:6px;padding:8px;width:140px;flex-shrink:0;position:relative;
+              `;
+
+              let html = `
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                  <div style="width:36px;height:36px;border-radius:50%;border:1px solid #8a6a1a;
+                    background:#0a0705;overflow:hidden;display:flex;align-items:center;
+                    justify-content:center;flex-shrink:0;cursor:pointer;" title="Trocar avatar"
+                    ${isMe ? 'id="avatarBtn-' + playerId + '"' : ''}>${av}</div>
+                  <div style="font-family:'Cinzel',serif;font-size:0.62rem;color:#e8c97a;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${s.name || '?'} ${isMe ? '(você)' : ''}
+                  </div>
                 </div>
-              </div>
-              <div style="font-size:0.65rem;color:#a08050;margin-bottom:4px;">
-                ❤ ${s.hp||0} / ${s.hpMax||20}
-              </div>
-              <div style="height:5px;background:#333;border-radius:2px;overflow:hidden;">
-                <div style="height:100%;width:${hpPct}%;background:${hpPct>50?'#16a34a':hpPct>25?'#ca8a04':'#dc2626'};"></div>
-              </div>
-              ${(s.status||[]).length>0?`<div style="font-size:0.55rem;color:#f1c40f;margin-top:4px;">⚠ ${s.status.join(', ')}</div>`:''}
-            `;
-            container.appendChild(card);
-          });
-        });
+                <div style="font-size:0.6rem;color:#a08050;margin-bottom:3px;">
+                  ❤ ${s.hp || 0} / ${s.hpMax || 20}
+                </div>
+                <div style="height:4px;background:#333;border-radius:2px;overflow:hidden;margin-bottom:6px;">
+                  <div style="height:100%;width:${hpPct}%;background:${hpPct > 50 ? '#16a34a' : hpPct > 25 ? '#ca8a04' : '#dc2626'};"></div>
+                </div>
+                ${(s.status || []).length > 0 ? `<div style="font-size:0.5rem;color:#f1c40f;margin-bottom:4px;">⚠ ${s.status.join(', ')}</div>` : ''}
+                <div style="display:flex;align-items:center;gap:4px;margin-top:4px;">
+                  <label style="font-size:0.5rem;color:#8a6a1a;">Init:</label>
+                  <input type="number" value="${initMod}" step="1" min="-5" max="10"
+                    style="width:36px;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;
+                    border-radius:3px;padding:2px;text-align:center;font-size:0.65rem;"
+                    data-initmod-player="${playerId}"
+                    ${isMe ? '' : 'style="opacity:0.6;"'}
+                    onchange="window.updateInitMod('${playerId}', this.value)">
+                </div>
+              `;
+
+              if (isMe) {
+                html += `<input type="file" id="avatarFile-${playerId}" accept="image/*" style="display:none;">`;
+              }
+
+              card.innerHTML = html;
+              container.appendChild(card);
+
+              // Avatar upload para meu card
+              if (isMe) {
+                const avatarBtn = document.getElementById(`avatarBtn-${playerId}`);
+                const fileInput = document.getElementById(`avatarFile-${playerId}`);
+                if (avatarBtn && fileInput) {
+                  avatarBtn.addEventListener('click', () => fileInput.click());
+                  fileInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    try {
+                      const formData = new FormData();
+                      formData.append('key', '00e4e8b63e8248b4e584774dad7cff00');
+                      formData.append('image', file);
+                      const resp = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData });
+                      const data = await resp.json();
+                      if (data.success) {
+                        await SheetSystem.updateSheet({ avatarUrl: data.data.url });
+                      }
+                    } catch (err) {
+                      console.error('Erro ao fazer upload de avatar:', err);
+                    }
+                    fileInput.value = '';
+                  });
+                }
+              }
+            });
+          }, { onlyOnce: true });
+        };
+
+        onSnapshot(sheetsRef, allPlayerCardsSub);
+
+        // Função global para salvar initMod do player
+        window.updateInitMod = async function(playerId, value) {
+          const mod = parseInt(value) || 0;
+          await set(dbRef(rtdb, `rooms/${roomCode}/playerInitMods/${playerId}`), { mod });
+        };
 
         // Habilita o chat após entrar na sala
         const chatInput = document.getElementById('chatInput');
