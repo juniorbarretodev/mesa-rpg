@@ -12,7 +12,8 @@
       "Bash(done)",
       "Bash(mkdir:*)",
       "Bash(npm run:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(findstr /n DrawSystem)"
     ]
   }
 }

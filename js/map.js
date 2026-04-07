@@ -33,14 +33,13 @@ export const MapSystem = {
       <div class="map-wrapper">
         <img id="mapImage" class="map-image" style="display: none;">
         <canvas id="mapGridCanvas" class="map-grid-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
-        <canvas id="mapDrawingCanvas" class="map-drawing-canvas"></canvas>
+        <canvas id="mapDrawingCanvas" class="map-drawing-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
         <div id="tokensLayer" class="tokens-layer"></div>
         <div class="map-drop-zone" id="mapDropZone">
           <p>Arraste uma imagem de mapa aqui</p>
           <p class="text-muted" style="font-size: 0.85rem;">ou clique para selecionar</p>
         </div>
         <input type="file" id="mapFileInput" accept="image/*" style="display: none;">
-        <canvas id="drawCanvas" style="position:absolute;inset:0;z-index:20;pointer-events:none;"></canvas>
       </div>
     `;
 

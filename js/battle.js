@@ -301,20 +301,26 @@ export const BattleSystem = {
         return;
       }
 
-      if (!phase.rolls[playerId]) {
-        console.warn('Battle: Player not in initiative rolls:', playerId);
+      // Try with both uid and lowercase uid fallback
+      let playerEntry = phase.rolls[playerId];
+      if (!playerEntry && (playerId.toLowerCase?.())) {
+        // Also check lowercase variant (some RTDB keys get normalized)
+        playerEntry = phase.rolls[playerId.toLowerCase()];
+      }
+      if (!playerEntry) {
+        console.warn('Battle: Player not in initiative rolls:', playerId, 'available:', Object.keys(phase.rolls || {}));
         return;
       }
 
       // Previne double-submission
-      if (phase.rolls[playerId].roll !== null) {
+      if (playerEntry.roll !== null) {
         console.log('Battle: Player already submitted, skipping');
         return;
       }
 
       // Sempre usa o initMod do RTDB (definido pelo jogador no card); fallback para DEX
-      const playerInitMod = initMods[playerId]?.mod;
-      const dexMod = phase.rolls[playerId].dexMod || 0;
+      const playerInitMod = initMods[playerId]?.mod ?? initMods[playerId.toLowerCase()]?.mod;
+      const dexMod = playerEntry.dexMod || 0;
       const mod = (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexMod;
       const total = rollVal + mod;
 
@@ -324,8 +330,10 @@ export const BattleSystem = {
         [`rolls/${playerId}.mod`]: mod
       });
 
-      // Atualiza o initiativeOrder local do player para mostrar na UI
-      this._onPlayerInitiativeUpdate(code, phase.rolls);
+      console.log(`Battle: Initiative rolled for ${playerEntry.name}: ${rollVal} + ${mod} = ${total}`);
+
+      // Refresh from RTDB to get the correct updated rolls
+      this._refreshInitiativeOrderFromRTDB();
 
       SoundManager.playDiceRoll();
       setTimeout(() => SoundManager.playDiceLand(), 300);
@@ -341,11 +349,26 @@ export const BattleSystem = {
     this.renderInitiativePanelForPlayers(order);
   },
 
+  // Called after submit to update with correct roll data
+  _refreshInitiativeOrderFromRTDB() {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+    onValue(ref(rtdb, `rooms/${code}/initiativePhase`), (snap) => {
+      const phase = snap.val();
+      if (phase?.active && phase.rolls) {
+        const allRolls = { ...phase.rolls };
+        const order = this._buildRealtimeOrder(allRolls);
+        this._cachedInitiativeOrder = order;
+        this.renderInitiativePanelForPlayers(order);
+      }
+    }, { onlyOnce: true });
+  },
+
   _buildRealtimeOrder(rolls) {
     if (!rolls) return [];
     // orderData tem o baseline com NPC rolls já feitos (phase.rolls tem só players)
     const orderData = this._cachedInitiativeOrder || [];
-    const npcRolls = orderData.filter(p => p.type === 'npc').map(p => ({ ...p }));
+    const npcRolls = orderData.filter(p => p.type === 'npc' || p.type === 'enemy').map(p => ({ ...p }));
 
     const playerRolls = Object.values(rolls).map(p => ({
       id: p.id,

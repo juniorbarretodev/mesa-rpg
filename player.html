@@ -216,9 +216,12 @@
       background: var(--color-bg-card);
       border-radius: var(--radius-lg);
       border: 1px solid rgba(212, 175, 55, 0.2);
-      aspect-ratio: 16/10;
+      width: 800px;
+      height: 600px;
+      max-width: 100%;
       position: relative;
       overflow: hidden;
+      margin: 0 auto;
     }
 
     .map-placeholder {
@@ -565,7 +568,6 @@
           <div class="map-viewer" id="mapViewer">
             <div id="mapWrapper" class="map-wrapper">
               <img id="mapImage" class="map-image" style="display: none;">
-              <canvas id="playerDrawCanvas" style="position:absolute;inset:0;z-index:20;pointer-events:none;"></canvas>
               <div id="tokensLayer" class="tokens-layer"></div>
               <div class="map-placeholder" id="mapPlaceholder">
                 <p style="font-size: 3rem; margin-bottom: 1rem;">🗺️</p>
@@ -616,44 +618,6 @@
     import { MapSystem } from './js/map.js';
     import { BattleSystem } from './js/battle.js';
 
-    // Player-side drawing renderer: syncs from master's DrawSystem RTDB data
-    const PlayerDrawSync = {
-      canvas: null,
-      ctx: null,
-      init() {
-        this.canvas = document.getElementById('playerDrawCanvas');
-        if (!this.canvas) return;
-        const wrapper = document.getElementById('mapWrapper');
-        if (!wrapper) return;
-        setTimeout(() => {
-          this.canvas.width = wrapper.offsetWidth;
-          this.canvas.height = wrapper.offsetHeight;
-          if (this.canvas.width > 0 && this.canvas.height > 0) {
-            this.ctx = this.canvas.getContext('2d');
-            // Load initial drawing
-            onRtdbValue(dbRef(rtdb, `rooms/${roomCode}/map/drawing`), (snap) => {
-              const dataURL = snap.val();
-              if (dataURL && this.ctx) {
-                const img = new Image();
-                img.onload = () => {
-                  this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                  this.ctx.drawImage(img, 0, 0);
-                };
-                img.src = dataURL;
-              }
-            });
-          }
-        }, 300);
-      },
-      resize() {
-        if (!this.canvas) return;
-        const wrapper = document.getElementById('mapWrapper');
-        if (!wrapper) return;
-        this.canvas.width = wrapper.offsetWidth;
-        this.canvas.height = wrapper.offsetHeight;
-      }
-    };
-
     // ✅ CORREÇÃO: leitura do código da sala pela URL
     const urlParams = new URLSearchParams(window.location.search);
     const roomCode = urlParams.get('code');
@@ -682,16 +646,6 @@
         console.log("[Player] Inicializando Mapa...");
         await MapSystem.initialize('mapViewer');
         MapSystem.subscribeToMap();
-        // Re-add the drawing canvas after MapSystem.initialize overwrites innerHTML
-        const mapViewer = document.getElementById('mapViewer');
-        const wrapper = document.getElementById('mapWrapper');
-        if (wrapper && !document.getElementById('playerDrawCanvas')) {
-          const drawCanvas = document.createElement('canvas');
-          drawCanvas.id = 'playerDrawCanvas';
-          drawCanvas.style.cssText = 'position:absolute;inset:0;z-index:20;pointer-events:none;';
-          wrapper.appendChild(drawCanvas);
-        }
-        PlayerDrawSync.init();
 
         console.log("[Player] Carregando Ficha e Batalha...");
         await SheetSystem.loadOrCreateSheet(roomCode);
@@ -1277,7 +1231,6 @@
       BattleSystem.cleanup();
       RoomSystem.cleanup();
     });
-    window.addEventListener('resize', () => PlayerDrawSync.resize());
   </script>
 </body>
 
