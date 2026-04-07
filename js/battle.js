@@ -22,9 +22,7 @@ export const BattleSystem = {
   async initialize() {
     await this.subscribeToBattleState();
     await this.loadParticipantsData();
-    if (RoomSystem.isMaster) {
-      this.subscribeToInitiativeOrder();
-    }
+    this.subscribeToInitiativeOrder();
   },
 
   async loadParticipantsData() {
@@ -64,9 +62,13 @@ export const BattleSystem = {
   onBattleStateChange(state) {
     if (!state) return;
 
-    if (state.active) {
+    if (state.active && state.initiative) {
       this.updateBattleUI(true);
-      this.updateTurnIndicator(state);
+      if (!RoomSystem.isMaster) {
+        this.renderInitiativePanelForPlayers(state.initiative);
+      } else {
+        this.updateTurnIndicator(state);
+      }
     } else {
       this.updateBattleUI(false);
     }
@@ -483,10 +485,15 @@ export const BattleSystem = {
     const listener = onValue(orderRef, (snap) => {
       const order = snap.val();
       if (order && Array.isArray(order)) {
-        this.renderInitiativePanel(order);
+        if (RoomSystem.isMaster) {
+          this.renderInitiativePanel(order);
+        } else {
+          this.renderInitiativePanelForPlayers(order);
+        }
       } else {
-        // Remove painel se iniciativa não existe
+        // Remove painéis se iniciativa não existe
         document.getElementById('initiativePanel')?.remove();
+        document.getElementById('initiativePanelPlayers')?.remove();
       }
     });
 
@@ -578,6 +585,55 @@ export const BattleSystem = {
         await this.reorderInitiative(newOrder);
       });
     });
+  },
+
+  renderInitiativePanelForPlayers(order) {
+    let container = document.getElementById('initiativePanelPlayers');
+    if (!container) {
+      // Create the panel in player.html if it doesn't exist yet
+      const mapViewer = document.getElementById('mapViewer');
+      if (!mapViewer) return;
+      container = document.createElement('div');
+      container.id = 'initiativePanelPlayers';
+      mapViewer.parentNode.insertBefore(container, mapViewer);
+    }
+
+    if (!order.length) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const isMyTurn = this.battleState?.active && this.battleState?.turn === AuthSystem.currentUser?.uid;
+
+    container.innerHTML = `
+      <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:6px;padding:8px;margin-bottom:8px;">
+        <h4 style="color:#e8c97a;margin:0 0 6px;font-family:'Cinzel',serif;font-size:0.75rem;letter-spacing:1px;">&#x2694; Iniciativa — Rodada ${this.battleState?.round || 1}</h4>
+        <div class="initiative-list-players">
+          ${order.map((p, idx) => {
+            const pos = idx + 1;
+            const isFirst = pos === 1;
+            const isCurrent = this.battleState?.turn === (p.id || p);
+            const roll = p.roll ?? '?';
+            const modStr = p.dexMod !== undefined ? (p.dexMod >= 0 ? `+${p.dexMod}` : `${p.dexMod}`) : '';
+            const total = p.total ?? '';
+            const typeLabel = p.type === 'npc' || p.type === 'enemy' ? '🔴' : '';
+            return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;margin:2px 0;
+              border-radius:4px;background:#0a0705;
+              border-left:3px solid ${isCurrent ? '#c9a84c' : isFirst ? '#555' : '#333'};
+              ${isCurrent ? 'background:rgba(201,168,76,0.15);' : ''}">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+                border-radius:50%;font-size:0.65rem;font-weight:bold;
+                ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">${pos}</span>
+              <span style="flex:1;color:#e8d8b0;font-size:0.75rem;font-family:'Cinzel',serif;">
+                ${typeLabel} ${p.name} ${p.id === AuthSystem.currentUser?.uid ? '(você)' : ''}
+                ${isCurrent && isMyTurn ? '<span style="color:#22c55e;font-weight:bold;"> — SUA VEZ!</span>' : ''}
+              </span>
+              ${p.dexMod !== undefined ? `<span style="color:#a08050;font-size:0.65rem;font-family:monospace;">${roll} ${modStr} = ${total}</span>` : `<span style="color:#a08050;font-size:0.65rem;font-family:monospace;">= ${total}</span>`}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
   },
 
   createInitiativePanel() {
@@ -1103,9 +1159,14 @@ export const BattleSystem = {
       off(battleRef, 'value', listener);
     });
     this.listeners = [];
+    this.initiativeListeners.forEach(({ ref: orderRef, listener }) => {
+      off(orderRef, 'value', listener);
+    });
+    this.initiativeListeners = [];
     this.battleState = null;
     this.playerAbilities = {};
     this.initiative = [];
+    document.getElementById('initiativePanelPlayers')?.remove();
   }
 };
 

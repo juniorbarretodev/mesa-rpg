@@ -67,10 +67,10 @@ export const DiceSystem = {
 
   playSound(phase) {
     const sounds = {
-      roll: 'sounds/dice/roll.wav',
-      land: 'sounds/dice/land.wav',
-      crit: 'sounds/dice/land.wav',
-      fail: 'sounds/dice/land.wav'
+      roll: '/sounds/dice/roll.wav',
+      land: '/sounds/dice/land.wav',
+      crit: '/sounds/dice/land.wav',
+      fail: '/sounds/dice/land.wav'
     };
 
     const soundFile = sounds[phase];

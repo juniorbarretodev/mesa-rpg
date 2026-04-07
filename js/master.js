@@ -105,6 +105,15 @@ export const MasterSystem = {
             <button class="btn btn-sm btn-success" style="padding:2px 6px;font-size:0.7rem;" onclick="MasterSystem.adjustPlayerHP('${sheet.id}', 1)">+1</button>
             <button class="btn btn-sm btn-success" style="padding:2px 6px;font-size:0.7rem;" onclick="MasterSystem.adjustPlayerHP('${sheet.id}', 5)">+5</button>
           </div>
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+            <label style="font-size:0.6rem;color:#8a6a1a;">HP Max:</label>
+            <button class="btn btn-sm btn-secondary" style="padding:1px 5px;font-size:0.65rem;" onclick="MasterSystem.adjustPlayerHPMax('${sheet.id}', -5)">-5</button>
+            <input type="number" value="${sheet.hpMax || 20}" min="1"
+              style="width:40px;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;
+                border-radius:3px;padding:2px;text-align:center;font-size:0.65rem;"
+              onchange="MasterSystem.setPlayerHPMax('${sheet.id}', this.value)">
+            <button class="btn btn-sm btn-secondary" style="padding:1px 5px;font-size:0.65rem;" onclick="MasterSystem.adjustPlayerHPMax('${sheet.id}', 5)">+5</button>
+          </div>
           <div style="height:6px;background:#333;border-radius:3px;overflow:hidden;margin-bottom:6px;">
             <div style="height:100%;width:${hpPct}%;background:${hpPct > 50 ? '#16a34a' : hpPct > 25 ? '#ca8a04' : '#dc2626'};transition:width 0.3s;"></div>
           </div>
@@ -202,6 +211,42 @@ export const MasterSystem = {
     this.syncPlayerToken(playerId);
 
     SoundManager.playDiceLand();
+  },
+
+  async adjustPlayerHPMax(playerId, delta) {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+
+    const sheetRef = doc(db, 'sheets', code, 'players', playerId);
+    const sheet = this.playerSheets[playerId];
+
+    if (!sheet) return;
+
+    const newMax = Math.max(1, (sheet.hpMax || 20) + delta);
+
+    await updateDoc(sheetRef, { hpMax: newMax });
+
+    this.playerSheets[playerId] = { ...sheet, hpMax: newMax };
+    this.renderPlayerSheets();
+    this.syncPlayerToken(playerId);
+  },
+
+  async setPlayerHPMax(playerId, value) {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+
+    const sheetRef = doc(db, 'sheets', code, 'players', playerId);
+    const sheet = this.playerSheets[playerId];
+
+    if (!sheet) return;
+
+    const newMax = Math.max(1, parseInt(value) || 20);
+
+    await updateDoc(sheetRef, { hpMax: newMax });
+
+    this.playerSheets[playerId] = { ...sheet, hpMax: newMax };
+    this.renderPlayerSheets();
+    this.syncPlayerToken(playerId);
   },
 
   showStatusModal(playerId, playerName) {

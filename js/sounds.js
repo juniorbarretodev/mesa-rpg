@@ -4,16 +4,16 @@ export const SoundManager = {
   volume: 0.7,
 
   SPELL_SOUNDS: {
-    fire: 'sounds/combat/magic_cast.wav',
-    ice: 'sounds/combat/magic_cast.wav',
-    heal: 'sounds/combat/magic_cast.wav',
-    thunder: 'sounds/combat/magic_cast.wav'
+    fire: '/sounds/combat/magic_cast.wav',
+    ice: '/sounds/combat/magic_cast.wav',
+    heal: '/sounds/combat/magic_cast.wav',
+    thunder: '/sounds/combat/magic_cast.wav'
   },
 
   DEATH_SOUNDS: {
-    player: 'sounds/combat/death_hero.wav',
-    enemy: 'sounds/combat/death_enemy.wav',
-    monster: 'sounds/combat/death_monster.wav'
+    player: '/sounds/combat/death_hero.wav',
+    enemy: '/sounds/combat/death_enemy.wav',
+    monster: '/sounds/combat/death_monster.wav'
   },
 
   async preload() {
@@ -92,33 +92,33 @@ export const SoundManager = {
   },
 
   playDiceRoll() {
-    this.play('sounds/dice/roll.wav');
+    this.play('/sounds/dice/roll.wav');
   },
 
   playDiceLand() {
-    this.play('sounds/dice/land.wav');
+    this.play('/sounds/dice/land.wav');
   },
 
   playSpellCast(type) {
-    const soundFile = this.SPELL_SOUNDS[type] || 'sounds/combat/magic_cast.wav';
+    const soundFile = this.SPELL_SOUNDS[type] || '/sounds/combat/magic_cast.wav';
     this.play(soundFile);
   },
 
   playDeath(type) {
-    const soundFile = this.DEATH_SOUNDS[type] || 'sounds/combat/death_enemy.wav';
+    const soundFile = this.DEATH_SOUNDS[type] || '/sounds/combat/death_enemy.wav';
     this.play(soundFile, { volume: 1 });
   },
 
   playButtonClick() {
-    this.play('sounds/ui/button_click');
+    this.play('/sounds/ui/button_click');
   },
 
   playNotification() {
-    this.play('sounds/ui/notification');
+    this.play('/sounds/ui/notification');
   },
 
   playBattleStart() {
-    this.play('sounds/ui/battle_start', { volume: 1 });
+    this.play('/sounds/ui/battle_start', { volume: 1 });
   },
 
   toggleMute() {

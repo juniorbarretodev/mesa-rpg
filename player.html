@@ -575,15 +575,21 @@
           </div>
 
           <div class="chat-container mt-md">
-            <div class="dice-quick-panel">
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d4">d4</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d6">d6</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d8">d8</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d10">d10</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d12">d12</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d20">d20</button>
+            <div class="panel" style="background:var(--color-bg-secondary);border-radius:var(--radius-md);padding:0.5rem;">
+              <h3 class="panel-title" style="font-size:0.8rem;">&#x1F3B2; Dados Rápidos</h3>
+              <div class="dice-quick-panel">
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d4">d4</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d6">d6</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d8">d8</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d10">d10</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d12">d12</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d20">d20</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="2d6">2d6</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d100">d100</button>
+              </div>
+              <div class="dice-result" id="diceResult">-</div>
+              <input type="text" id="customDiceInput" class="input" placeholder="Ex: 2d12+3" style="margin-top:4px;font-size:0.8rem;">
             </div>
-            <div class="dice-result" id="diceResult">-</div>
 
             <div class="chat-messages" id="chatMessages"></div>
 
@@ -885,9 +891,17 @@
       // Verificação se elementos existem antes de manipular
       const safe = (id) => document.getElementById(id);
 
-      safe('charAvatar') && (safe('charAvatar').textContent = sheet.name?.[0]?.toUpperCase() || '?');
-      safe('charName') && (safe('charName').textContent = sheet.name);
-      safe('charClass') && (safe('charClass').textContent = `${sheet.class} Nv. ${sheet.level}`);
+      const avatarEl = safe('charAvatar');
+      if (avatarEl) {
+        if (sheet.avatarUrl) {
+          avatarEl.textContent = '';
+          avatarEl.innerHTML = `<img src="${sheet.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+        } else {
+          avatarEl.textContent = sheet.name?.[0]?.toUpperCase() || '?';
+        }
+      }
+      safe('charName') && (safe('charName')).textContent = sheet.name;
+      safe('charClass') && (safe('charClass')).textContent = `${sheet.class} Nv. ${sheet.level}`;
 
       safe('hpText') && (safe('hpText').textContent = `${sheet.hp} / ${sheet.hpMax}`);
       safe('hpBar') && (safe('hpBar').style.width = `${(sheet.hp / sheet.hpMax) * 100}%`);
@@ -898,9 +912,12 @@
       ).join('');
 
       const generalTab = document.getElementById('generalTab');
+      const avatarContent = sheet.avatarUrl
+        ? `<img src="${sheet.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+        : (sheet.name?.[0]?.toUpperCase() || '?');
       generalTab.innerHTML = `
         <div style="display: flex; gap: 1rem; align-items: center;">
-          <div class="avatar" style="width: 80px; height: 80px; font-size: 2rem;">${sheet.name?.[0]?.toUpperCase() || '?'}</div>
+          <div class="avatar" style="width: 80px; height: 80px; font-size: 2rem;overflow:hidden;">${avatarContent}</div>
           <div>
             <h3 style="margin: 0 0 0.25rem 0;">${sheet.name || 'Sem nome'}</h3>
             <p style="margin: 0; color: var(--color-text-secondary);">${sheet.class || 'Aventureiro'} — Nível ${sheet.level || 1}</p>
@@ -1127,6 +1144,24 @@
         SoundManager.playDiceRoll();
         setTimeout(() => SoundManager.playDiceLand(), 300);
       });
+    });
+
+    // Custom dice input (Enter key)
+    document.getElementById('customDiceInput')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const input = e.target.value.trim();
+        if (input) {
+          const display = document.getElementById('diceResult');
+          document.getElementById('customDiceInput').value = '';
+          DiceSystem.rollWithAnimation(input, display, { animate: true }).then(result => {
+            display.textContent = DiceSystem.formatResult(result);
+            ChatSystem.sendRoll(input, result.results, result.total, 'Teste');
+            SoundManager.playDiceRoll();
+            setTimeout(() => SoundManager.playDiceLand(), 300);
+          });
+        }
+      }
     });
 
     document.getElementById('chatForm').addEventListener('submit', async (e) => {
