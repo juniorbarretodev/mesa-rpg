@@ -26,12 +26,51 @@ export const SoundManager = {
   play(soundKey, options = {}) {
     if (this.muted) return;
 
-    const { volume = this.volume, loop = false, fadeIn = false } = options;
+    const { volume = this.volume, loop = false, fadeIn = false, extensions = ['.wav', '.ogg', '.mp3'] } = options;
 
     let audio = this.sounds[soundKey];
     if (!audio) {
-      audio = new Audio(soundKey);
-      audio.preload = 'auto';
+      // Try with extension if file doesn't have one
+      const tryExtensions = !soundKey.match(/\.(wav|mp3|ogg|aiff?|flac)$/i);
+      if (tryExtensions) {
+        // Try with each extension until one works
+        const playOne = (index) => {
+          if (index >= extensions.length) return null;
+          const url = soundKey + extensions[index];
+          const testAudio = new Audio(url);
+          testAudio.load();
+          return testAudio.play()
+            .then(() => testAudio)
+            .catch(() => playOne(index + 1));
+        };
+        const playPromise = playOne(0);
+        if (playPromise) {
+          playPromise.then(foundAudio => {
+            if (!foundAudio) return;
+            if (fadeIn) {
+              const step = volume / 20;
+              foundAudio.volume = 0;
+              foundAudio.loop = loop;
+              this.sounds[soundKey] = foundAudio;
+              const fadeInterval = setInterval(() => {
+                if (foundAudio.volume < volume) {
+                  foundAudio.volume = Math.min(foundAudio.volume + step, volume);
+                } else {
+                  clearInterval(fadeInterval);
+                }
+              }, 50);
+            } else {
+              foundAudio.volume = volume;
+              foundAudio.loop = loop;
+              this.sounds[soundKey] = foundAudio;
+            }
+          }).catch(() => {});
+        }
+        return;
+      } else {
+        audio = new Audio(soundKey);
+        audio.preload = 'auto';
+      }
     }
 
     audio.volume = 0;
@@ -53,11 +92,11 @@ export const SoundManager = {
   },
 
   playDiceRoll() {
-    this.play('dice_roll');
+    this.play('sounds/dice/roll.wav');
   },
 
   playDiceLand() {
-    this.play('dice_land');
+    this.play('sounds/dice/land.wav');
   },
 
   playSpellCast(type) {
@@ -71,15 +110,15 @@ export const SoundManager = {
   },
 
   playButtonClick() {
-    this.play('ui_button_click');
+    this.play('sounds/ui/button_click');
   },
 
   playNotification() {
-    this.play('ui_notification');
+    this.play('sounds/ui/notification');
   },
 
   playBattleStart() {
-    this.play('ui_battle_start', { volume: 1 });
+    this.play('sounds/ui/battle_start', { volume: 1 });
   },
 
   toggleMute() {

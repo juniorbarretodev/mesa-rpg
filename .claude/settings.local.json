@@ -5,7 +5,11 @@
       "Bash(node -c js/master.js)",
       "Bash(node -c js/map.js)",
       "Bash(node -c js/battle.js)",
-      "Bash(grep -rn \"collection\\\\|doc\\\\|set\\\\|update\\\\|addDoc\\\\|setDoc\\\\|updateDoc\\\\|onSnapshot\\\\|deleteDoc\\\\|write\\\\|allow\\\\|read\" C:UsersjunniOneDriveDocumentosMeus-estudosmesa-rpgjs*.js --include=*.js)"
+      "Bash(grep -rn \"collection\\\\|doc\\\\|set\\\\|update\\\\|addDoc\\\\|setDoc\\\\|updateDoc\\\\|onSnapshot\\\\|deleteDoc\\\\|write\\\\|allow\\\\|read\" C:UsersjunniOneDriveDocumentosMeus-estudosmesa-rpgjs*.js --include=*.js)",
+      "Bash(for d:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/junni/OneDrive/Documentos/Meus-estudos/mesa-rpg/sounds/**)",
+      "Bash(done)"
     ]
   }
 }

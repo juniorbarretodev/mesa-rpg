@@ -565,6 +565,7 @@
           <div class="map-viewer" id="mapViewer">
             <div id="mapWrapper" class="map-wrapper">
               <img id="mapImage" class="map-image" style="display: none;">
+              <canvas id="playerDrawCanvas" style="position:absolute;inset:0;z-index:20;pointer-events:none;"></canvas>
               <div id="tokensLayer" class="tokens-layer"></div>
               <div class="map-placeholder" id="mapPlaceholder">
                 <p style="font-size: 3rem; margin-bottom: 1rem;">🗺️</p>
@@ -609,6 +610,43 @@
     import { MapSystem } from './js/map.js';
     import { BattleSystem } from './js/battle.js';
 
+    // Player-side drawing renderer: syncs from master's DrawSystem RTDB data
+    const PlayerDrawSync = {
+      canvas: null,
+      ctx: null,
+      subscription: null,
+      init() {
+        this.canvas = document.getElementById('playerDrawCanvas');
+        if (!this.canvas) return;
+        const wrapper = document.getElementById('mapWrapper');
+        if (!wrapper) return;
+        this.canvas.width = wrapper.offsetWidth;
+        this.canvas.height = wrapper.offsetHeight;
+        this.ctx = this.canvas.getContext('2d');
+        // Subscribe to changes in RTDB drawing (from master's DrawSystem)
+        onRtdbValue(dbRef(rtdb, `rooms/${roomCode}/map/drawing`), (snap) => {
+          const dataURL = snap.val();
+          if (dataURL && this.ctx) {
+            const img = new Image();
+            img.onload = () => {
+              this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+              this.ctx.drawImage(img, 0, 0);
+            };
+            img.src = dataURL;
+          } else if (this.ctx) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          }
+        });
+      },
+      resize() {
+        if (!this.canvas) return;
+        const wrapper = document.getElementById('mapWrapper');
+        if (!wrapper) return;
+        this.canvas.width = wrapper.offsetWidth;
+        this.canvas.height = wrapper.offsetHeight;
+      }
+    };
+
     // ✅ CORREÇÃO: leitura do código da sala pela URL
     const urlParams = new URLSearchParams(window.location.search);
     const roomCode = urlParams.get('code');
@@ -637,6 +675,7 @@
         console.log("[Player] Inicializando Mapa...");
         await MapSystem.initialize('mapViewer');
         MapSystem.subscribeToMap();
+        PlayerDrawSync.init();
 
         console.log("[Player] Carregando Ficha e Batalha...");
         await SheetSystem.loadOrCreateSheet(roomCode);
@@ -647,6 +686,7 @@
 
         SheetSystem.subscribeToSheet(roomCode, renderSheet);
         ChatSystem.subscribeToChat(roomCode, renderChat);
+        ChatSystem.subscribeToDice(roomCode, renderDiceFeed);
 
         // Carrega initMods em tempo real
         const allPlayerCardsSub = (snap) => {
@@ -960,6 +1000,13 @@
       container.scrollTop = container.scrollHeight;
     }
 
+    function renderDiceFeed(rolls) {
+      const container = document.getElementById('chatMessages');
+      if (!container) return;
+      // Dice rolls are already shown as chat messages via renderChat (type='roll').
+      // This function is kept for future dedicated dice panel if needed.
+    }
+
     function updateMapDisplay() {
       const mapData = MapSystem.currentMap;
       const mapPlaceholder = document.getElementById('mapPlaceholder');
@@ -1164,6 +1211,7 @@
       BattleSystem.cleanup();
       RoomSystem.cleanup();
     });
+    window.addEventListener('resize', () => PlayerDrawSync.resize());
   </script>
 </body>
 

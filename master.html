@@ -553,7 +553,7 @@
   </main>
 
   <script type="module">
-    import { ref, onValue } from "firebase/database";
+    import { ref, onValue, update, set } from "firebase/database";
     import { rtdb } from './js/firebase.js';
     import { AuthSystem } from './js/auth.js';
     import { RoomSystem } from './js/room.js';
@@ -613,7 +613,10 @@
         if (window.DrawSystem) {
           // Sync DrawSystem to use the drawCanvas MapSystem created in initialize
           window.DrawSystem.canvas = document.getElementById('drawCanvas');
-          if (window.DrawSystem.canvas) window.DrawSystem.init();
+          if (window.DrawSystem.canvas) {
+            window.DrawSystem.init();
+            window.DrawSystem.syncFromRTDB();
+          }
         }
 
         // Listener em tempo real para botão "Finalizar Iniciativa"
@@ -854,8 +857,37 @@
           }
         });
 
-        this.canvas.addEventListener('mouseup',    () => { this.drawing = false; });
-        this.canvas.addEventListener('mouseleave', () => { this.drawing = false; });
+        this.canvas.addEventListener('mouseup',    () => { this.drawing = false; this.syncToRTDB(); });
+        this.canvas.addEventListener('mouseleave', () => { this.drawing = false; this.syncToRTDB(); });
+      },
+
+      syncTimer: null,
+      syncToRTDB() {
+        if (!this.ctx || !this.canvas) return;
+        // Debounce to avoid flooding RTDB during rapid drawing
+        clearTimeout(this.syncTimer);
+        this.syncTimer = setTimeout(() => {
+          const dataURL = this.canvas.toDataURL('image/png');
+          const code = RoomSystem.currentRoomCode;
+          if (!code) return;
+          update(ref(rtdb, `rooms/${code}/map`), { drawing: dataURL }).catch(() => {});
+        }, 500);
+      },
+
+      syncFromRTDB() {
+        const code = RoomSystem.currentRoomCode;
+        if (!code) return;
+        onValue(ref(rtdb, `rooms/${code}/map/drawing`), (snap) => {
+          const dataURL = snap.val();
+          if (dataURL && this.ctx && this.canvas) {
+            const img = new Image();
+            img.onload = () => {
+              this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+              this.ctx.drawImage(img, 0, 0);
+            };
+            img.src = dataURL;
+          }
+        });
       },
 
       setTool(tool) {
@@ -868,6 +900,9 @@
 
       clear() {
         if (this.ctx) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // Clear from RTDB so it syncs to players too
+        const code = RoomSystem.currentRoomCode;
+        if (code) set(ref(rtdb, `rooms/${code}/map/drawing`), null).catch(() => {});
       },
 
       resize() {
