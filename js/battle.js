@@ -65,7 +65,15 @@ export const BattleSystem = {
     if (state.active && state.initiative) {
       this.updateBattleUI(true);
       if (!RoomSystem.isMaster) {
-        this.renderInitiativePanelForPlayers(state.initiative);
+        // For players: only show participants who have actually rolled
+        const initiativeList = [];
+        for (const p of state.initiative) {
+          if (p.total !== null && p.total !== undefined && p.roll !== null && p.roll !== undefined) {
+            initiativeList.push(p);
+          }
+        }
+        initiativeList.sort((a, b) => b.total - a.total);
+        this.renderInitiativePanelForPlayers(initiativeList);
       } else {
         this.updateTurnIndicator(state);
       }
@@ -375,9 +383,9 @@ export const BattleSystem = {
     if (!rolls) return [];
     // orderData tem o baseline com NPC rolls já feitos (phase.rolls tem só players)
     const orderData = this._cachedInitiativeOrder || [];
-    const npcRolls = orderData.filter(p => p.type === 'npc' || p.type === 'enemy').map(p => ({ ...p }));
+    const npcRolls = orderData.filter(p => (p.type === 'npc' || p.type === 'enemy') && p.roll !== null).map(p => ({ ...p }));
 
-    const playerRolls = Object.values(rolls).map(p => ({
+    const playerRolls = Object.values(rolls).filter(p => p.roll !== null && p.roll !== undefined).map(p => ({
       id: p.id,
       name: p.name,
       type: 'player',
@@ -388,13 +396,8 @@ export const BattleSystem = {
     }));
 
     const all = [...playerRolls, ...npcRolls];
-    // Ordena por total desc, nulls por último
-    all.sort((a, b) => {
-      if (a.total === null && b.total === null) return 0;
-      if (a.total === null) return 1;
-      if (b.total === null) return -1;
-      return b.total - a.total;
-    });
+    // Sort desc (only players with rolls are in the list)
+    all.sort((a, b) => b.total - a.total);
     return all;
   },
 
@@ -601,7 +604,9 @@ export const BattleSystem = {
         if (RoomSystem.isMaster) {
           this.renderInitiativePanel(order);
         } else {
-          this.renderInitiativePanelForPlayers(order);
+          const rolledList = order.filter(p => p.total !== null && p.total !== undefined && p.roll !== null && p.roll !== undefined);
+          rolledList.sort((a, b) => b.total - a.total);
+          this.renderInitiativePanelForPlayers(rolledList);
         }
       } else {
         // Remove painéis se iniciativa não existe
@@ -742,18 +747,15 @@ export const BattleSystem = {
       mapViewer.parentNode.insertBefore(container, mapViewer);
     }
 
-    if (!order.length) {
-      container.innerHTML = '';
-      return;
-    }
-
-    const isMyTurn = this.battleState?.active && this.battleState?.turn === AuthSystem.currentUser?.uid;
     const myId = AuthSystem.currentUser?.uid;
+    const isMyTurn = this.battleState?.active && this.battleState?.turn === myId;
 
-    // Only show roll button if phase is still active and player hasn't rolled yet
-    const phaseActive = this._phaseActive !== false;
-    const myEntry = order.find(p => p.id === myId);
-    const needsToRoll = phaseActive && myEntry && (myEntry.roll === null || myEntry.roll === undefined);
+    // Determine if current player needs to roll (check phaseRolls, not the order which only has rolled players)
+    const phaseRolls = this._initPhaseRolls || {};
+    const phaseActive = this._phaseActive || false;
+    const myPhaseEntry = phaseRolls[myId];
+    const needsToRoll = phaseActive && myPhaseEntry && (myPhaseEntry.roll === null || myPhaseEntry.roll === undefined);
+    const hasRolled = myPhaseEntry && myPhaseEntry.roll !== null && myPhaseEntry.roll !== undefined;
 
     let rollButtonHtml = '';
     if (needsToRoll) {
@@ -765,10 +767,10 @@ export const BattleSystem = {
           </button>
         </div>
       `;
-    } else if (myEntry && myEntry.roll !== null && myEntry.roll !== undefined) {
-      const rollDisplay = myEntry.roll !== undefined && myEntry.roll !== null ? myEntry.roll : '?';
-      const modVal = myEntry.dexMod !== undefined && myEntry.dexMod !== null ? myEntry.dexMod : 0;
-      const totalDisplay = myEntry.total !== undefined && myEntry.total !== null ? myEntry.total : '';
+    } else if (hasRolled) {
+      const rollDisplay = myPhaseEntry.roll || '?';
+      const modVal = myPhaseEntry.mod !== undefined && myPhaseEntry.mod !== null ? myPhaseEntry.mod : 0;
+      const totalDisplay = myPhaseEntry.total || '';
       const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
       rollButtonHtml = `
         <div style="padding:6px 8px;margin-bottom:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:6px;text-align:center;">
@@ -777,9 +779,14 @@ export const BattleSystem = {
       `;
     }
 
+    // Sort the order list (all entries already have totals since only rolled players + NPCs are included)
+    this._sortInitiativeList(order);
+
     container.innerHTML = `
       <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:6px;padding:8px;margin-bottom:8px;">
-        <h4 style="color:#e8c97a;margin:0 0 6px;font-family:'Cinzel',serif;font-size:0.75rem;letter-spacing:1px;">&#x2694; Iniciativa — Rodada ${this.battleState?.round || 1}</h4>
+        <h4 style="color:#e8c97a;margin:0 0 6px;font-family:'Cinzel',serif;font-size:0.75rem;letter-spacing:1px;">&#x2694; Iniciativa — Rodada ${this.battleState?.round || 1}
+          <button id="sortInitiativeBtn" title="Ordenar por iniciativa (maior para menor)" style="background:none;border:none;color:#8a6a1a;cursor:pointer;font-size:0.75rem;margin-left:6px;vertical-align:middle;">⇅</button>
+        </h4>
         ${rollButtonHtml}
         <div class="initiative-list-players">
           ${order.map((p, idx) => {
@@ -809,6 +816,13 @@ export const BattleSystem = {
       </div>
     `;
 
+    // Wire up sort button
+    document.getElementById('sortInitiativeBtn')?.addEventListener('click', () => {
+      this._sortInitiativeList(order);
+      this.renderInitiativePanelForPlayers(order);
+    });
+
+    // Wire up roll button
     const rollBtn = document.getElementById('playerInitRollBtn');
     if (rollBtn && needsToRoll) {
       rollBtn.addEventListener('click', async () => {
@@ -819,10 +833,9 @@ export const BattleSystem = {
 
         const rollVal = Math.floor(Math.random() * 20) + 1;
 
-        // Submit roll to RTDB — submit calculates mod and total authoritatively
         await this.submitInitiativeRoll({ results: [rollVal] });
 
-        // Small delay then refresh panel from authoritative source (phase rolls in RTDB)
+        // Refresh panel after short delay to pick up new RTDB values
         setTimeout(() => {
           this._renderPanelWithPhase();
         }, 300);
@@ -981,6 +994,8 @@ export const BattleSystem = {
 
     // Build the complete order from cached initiativeOrder (NPCs) + phase (players)
     const cached = this._cachedInitiativeOrder || [];
+
+    // Only NPCs that have a rolled value — NPCs auto-roll so they always have values
     const npcEntries = cached.filter(p => p.type === 'npc' || p.type === 'enemy').map(p => ({
       id: p.id,
       name: p.name,
@@ -992,6 +1007,7 @@ export const BattleSystem = {
       avatarUrl: p.avatarUrl || ''
     }));
 
+    // Only players who HAVE rolled (roll !== null)
     const playerEntries = Object.values(phaseRolls).map(p => ({
       id: p.id,
       name: p.name,
@@ -1000,17 +1016,25 @@ export const BattleSystem = {
       roll: p.roll !== undefined && p.roll !== null ? p.roll : null,
       total: p.total !== undefined && p.total !== null ? p.total : null,
       avatarUrl: p.avatarUrl || ''
-    }));
+    })).filter(p => p.roll !== null);
 
     const all = [...playerEntries, ...npcEntries];
-    all.sort((a, b) => {
-      if (a.total === null && b.total === null) return 0;
-      if (a.total === null) return 1;
-      if (b.total === null) return -1;
-      return b.total - a.total;
-    });
+    this._sortInitiativeList(all);
 
     this.renderInitiativePanelForPlayers(all);
+  },
+
+  _sortInitiativeList(list) {
+    list.sort((a, b) => {
+      const aHasTotal = a.total !== undefined && a.total !== null;
+      const bHasTotal = b.total !== undefined && b.total !== null;
+      // Both have totals: sort desc
+      if (aHasTotal && bHasTotal) return b.total - a.total;
+      // Only one has total: the one with total goes first
+      if (aHasTotal) return -1;
+      if (bHasTotal) return 1;
+      return 0;
+    });
   },
 
   async startBattle() {
