@@ -665,7 +665,7 @@
       const container = document.getElementById('chatMessages');
       container.innerHTML = messages.slice(-50).map(m => {
         const time = new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const typeClass = m.type === 'roll' ? 'text-gold' : m.type === 'action' ? 'text-green' : m.type === 'battle' ? 'text-red' : m.type === 'system' ? 'text-purple' : '';
+        const typeClass = m.type === 'roll' ? 'text-gold' : m.type === 'action' ? 'text-green' : m.type === 'battle' ? 'text-red' : m.type === 'initiative' ? 'text-purple' : m.type === 'system' ? 'text-purple' : '';
         
         if (m.type === 'roll') {
           return `<div class="message"><span class="message-sender">${m.senderNick}</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div class="message-roll">🎲 ${m.text}</div></div>`;

@@ -212,9 +212,12 @@
       background: var(--color-bg-card);
       border-radius: var(--radius-lg);
       border: 1px solid rgba(212, 175, 55, 0.2);
-      aspect-ratio: 16/10;
+      width: 800px;
+      height: 600px;
+      max-width: 100%;
       position: relative;
       overflow: hidden;
+      margin: 0 auto;
     }
 
     .map-placeholder {
@@ -490,12 +493,12 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/player-C3YYjK1j.js"></script>
+  <script type="module" crossorigin src="/assets/player-DGp3ZUyH.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/sounds-D8zRJubN.js">
   <link rel="modulepreload" crossorigin href="/assets/dice-DwlbI5xZ.js">
-  <link rel="modulepreload" crossorigin href="/assets/battle-ClXZCOPJ.js">
+  <link rel="modulepreload" crossorigin href="/assets/battle-CGDyQNm8.js">
   <link rel="stylesheet" crossorigin href="/assets/sounds-CCMRs7ij.css">
-  <link rel="stylesheet" crossorigin href="/assets/battle-grDkpdPG.css">
+  <link rel="stylesheet" crossorigin href="/assets/battle-Bs8EsFhE.css">
 </head>
 
 <body class="page battle-mode">
@@ -567,7 +570,6 @@
           <div class="map-viewer" id="mapViewer">
             <div id="mapWrapper" class="map-wrapper">
               <img id="mapImage" class="map-image" style="display: none;">
-              <canvas id="playerDrawCanvas" style="position:absolute;inset:0;z-index:20;pointer-events:none;"></canvas>
               <div id="tokensLayer" class="tokens-layer"></div>
               <div class="map-placeholder" id="mapPlaceholder">
                 <p style="font-size: 3rem; margin-bottom: 1rem;">🗺️</p>

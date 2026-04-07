@@ -375,8 +375,8 @@ export const BattleSystem = {
       name: p.name,
       type: 'player',
       dexMod: p.mod ?? p.dexMod ?? 0,
-      roll: p.roll,
-      total: p.total,
+      roll: p.roll !== undefined && p.roll !== null ? p.roll : null,
+      total: p.total !== undefined && p.total !== null ? p.total : null,
       avatarUrl: p.avatarUrl || ''
     }));
 
@@ -419,14 +419,25 @@ export const BattleSystem = {
       const finalOrder = orderItems.map(item => {
         if (item.type === 'player' && phaseData?.rolls?.[item.id]?.roll !== null) {
           const phaseRoll = phaseData.rolls[item.id];
+          const resolvedMod = phaseRoll.mod !== undefined && phaseRoll.mod !== null ? phaseRoll.mod : (phaseRoll.total - phaseRoll.roll);
           return {
             ...item,
-            roll: phaseRoll.roll,
-            total: phaseRoll.total,
-            mod: phaseRoll.mod !== undefined ? phaseRoll.mod : (phaseRoll.total - phaseRoll.roll)
+            roll: phaseRoll.roll !== undefined && phaseRoll.roll !== null ? phaseRoll.roll : 0,
+            total: phaseRoll.total !== undefined && phaseRoll.total !== null ? phaseRoll.total : 0,
+            mod: resolvedMod,
+            dexMod: resolvedMod,
+            npcCardId: item.npcCardId || null,
+            avatarUrl: item.avatarUrl || ''
           };
         }
-        return item;
+        return {
+          ...item,
+          roll: item.roll ?? null,
+          total: item.total ?? null,
+          dexMod: item.dexMod ?? 0,
+          npcCardId: item.npcCardId || null,
+          avatarUrl: item.avatarUrl || ''
+        };
       });
 
       // Ordena por total (decrescente), null por último
@@ -717,7 +728,6 @@ export const BattleSystem = {
   renderInitiativePanelForPlayers(order) {
     let container = document.getElementById('initiativePanelPlayers');
     if (!container) {
-      // Create the panel in player.html if it doesn't exist yet
       const mapViewer = document.getElementById('mapViewer');
       if (!mapViewer) return;
       container = document.createElement('div');
@@ -731,18 +741,43 @@ export const BattleSystem = {
     }
 
     const isMyTurn = this.battleState?.active && this.battleState?.turn === AuthSystem.currentUser?.uid;
+    const myId = AuthSystem.currentUser?.uid;
+
+    // Check if current player still needs to roll
+    const myEntry = order.find(p => p.id === myId);
+    const needsToRoll = myEntry && (myEntry.roll === null || myEntry.roll === undefined);
+
+    let rollButtonHtml = '';
+    if (needsToRoll) {
+      rollButtonHtml = `
+        <div style="padding:8px;margin-bottom:6px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:6px;text-align:center;">
+          <div style="color:#c4b5fd;font-size:0.75rem;margin-bottom:6px;font-family:'Cinzel',serif;">Sua vez de rolar iniciativa!</div>
+          <button id="playerInitRollBtn" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:1.1rem;font-weight:bold;letter-spacing:1px;box-shadow:0 2px 8px rgba(124,58,237,0.4);">
+            🎲 1d20
+          </button>
+        </div>
+      `;
+    } else if (myEntry && myEntry.roll !== null) {
+      const modStr = myEntry.dexMod !== undefined ? (myEntry.dexMod >= 0 ? `+${myEntry.dexMod}` : `${myEntry.dexMod}`) : '';
+      rollButtonHtml = `
+        <div style="padding:6px 8px;margin-bottom:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:6px;text-align:center;">
+          <span style="color:#22c55e;font-size:0.8rem;font-family:monospace;">✅ Iniciativa: ${myEntry.roll} ${modStr} = ${myEntry.total}</span>
+        </div>
+      `;
+    }
 
     container.innerHTML = `
       <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:6px;padding:8px;margin-bottom:8px;">
         <h4 style="color:#e8c97a;margin:0 0 6px;font-family:'Cinzel',serif;font-size:0.75rem;letter-spacing:1px;">&#x2694; Iniciativa — Rodada ${this.battleState?.round || 1}</h4>
+        ${rollButtonHtml}
         <div class="initiative-list-players">
           ${order.map((p, idx) => {
             const pos = idx + 1;
             const isFirst = pos === 1;
             const isCurrent = this.battleState?.turn === (p.id || p);
-            const roll = p.roll ?? '?';
+            const roll = p.roll !== undefined && p.roll !== null ? p.roll : '?';
             const modStr = p.dexMod !== undefined ? (p.dexMod >= 0 ? `+${p.dexMod}` : `${p.dexMod}`) : '';
-            const total = p.total ?? '';
+            const total = p.total !== undefined && p.total !== null ? p.total : '';
             const typeLabel = p.type === 'npc' || p.type === 'enemy' ? '🔴' : '';
             return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;margin:2px 0;
               border-radius:4px;background:#0a0705;
@@ -752,7 +787,7 @@ export const BattleSystem = {
                 border-radius:50%;font-size:0.65rem;font-weight:bold;
                 ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">${pos}</span>
               <span style="flex:1;color:#e8d8b0;font-size:0.75rem;font-family:'Cinzel',serif;">
-                ${typeLabel} ${p.name} ${p.id === AuthSystem.currentUser?.uid ? '(você)' : ''}
+                ${typeLabel} ${p.name} ${p.id === myId ? '(você)' : ''}
                 ${isCurrent && isMyTurn ? '<span style="color:#22c55e;font-weight:bold;"> — SUA VEZ!</span>' : ''}
               </span>
               ${p.dexMod !== undefined ? `<span style="color:#a08050;font-size:0.65rem;font-family:monospace;">${roll} ${modStr} = ${total}</span>` : `<span style="color:#a08050;font-size:0.65rem;font-family:monospace;">= ${total}</span>`}
@@ -761,6 +796,57 @@ export const BattleSystem = {
         </div>
       </div>
     `;
+
+    // Wire up the roll button
+    if (needsToRoll) {
+      const rollBtn = document.getElementById('playerInitRollBtn');
+      if (rollBtn) {
+        rollBtn.addEventListener('click', async () => {
+          rollBtn.disabled = true;
+          rollBtn.innerHTML = '⏳ Rolando...';
+
+          const rollVal = Math.floor(Math.random() * 20) + 1;
+
+          // Get player's init mod
+          const code = RoomSystem.currentRoomCode;
+          let mod = 0;
+          try {
+            const initModsSnap = await new Promise((resolve) => {
+              onValue(ref(rtdb, `rooms/${code}/playerInitMods`), s => resolve(s.val() || {}), { onlyOnce: true });
+            });
+            const phaseSnap = await new Promise((resolve) => {
+              onValue(ref(rtdb, `rooms/${code}/initiativePhase`), s => resolve(s.val()), { onlyOnce: true });
+            });
+            const playerInitMod = initModsSnap[myId]?.mod ?? initModsSnap[myId.toLowerCase()]?.mod;
+            const dexMod = phaseSnap?.rolls?.[myId]?.dexMod ?? 0;
+            mod = (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexMod;
+          } catch (e) {
+            console.warn('Battle: Could not fetch player init mod, using 0');
+          }
+
+          const total = rollVal + mod;
+
+          // Submit roll to RTDB
+          await this.submitInitiativeRoll({ results: [rollVal] });
+
+          // Send to chat with purple text
+          const nick = AuthSystem.currentNick || AuthSystem.currentUser?.displayName || 'Jogador';
+          await ChatSystem.sendMessage(
+            `<span style="color:#a855f7;font-weight:bold;">${nick}</span> <span style="color:#a855f7;">rolou iniciativa: 🎲 <span style="font-size:1.2rem;font-weight:bold;">${rollVal}</span> (Mod ${mod >= 0 ? '+' : ''}${mod}) → <span style="font-size:1.2rem;font-weight:bold;">${total}</span></span>`,
+            'initiative'
+          );
+
+          // Update button to show success
+          rollBtn.disabled = true;
+          rollBtn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+          rollBtn.style.boxShadow = '0 2px 8px rgba(34,197,94,0.4)';
+          rollBtn.innerHTML = `✅ ${rollVal} ${mod >= 0 ? '+' : ''}${mod} = ${total}`;
+
+          SoundManager.playDiceRoll();
+          setTimeout(() => SoundManager.playDiceLand(), 300);
+        });
+      }
+    }
   },
 
   createInitiativePanel() {
@@ -882,87 +968,32 @@ export const BattleSystem = {
   },
 
   // Exibe modal ao jogador para rolar iniciativa
-  showPlayerInitiativeModal() {
-    const code = RoomSystem.currentRoomCode;
-    if (!code) return;
-
+  subscribeToInitiativePhaseForPlayers(code) {
     const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
-    let modalOpen = false;
+    const initiativeOrderRef = ref(rtdb, `rooms/${code}/initiativeOrder`);
 
-    onValue(initRef, (snap) => {
-      const phase = snap.val();
+    onValue(initiativeOrderRef, (orderSnap) => {
+      const order = orderSnap.val() || [];
+      this._cachedInitiativeOrder = order;
+
+      this._updatePlayerRollPanel(order);
+    });
+
+    onValue(initRef, (phaseSnap) => {
+      const phase = phaseSnap.val();
       if (!phase || !phase.active) {
-        document.getElementById('initiativePlayerModal')?.remove();
-        modalOpen = false;
+        const container = document.getElementById('initiativePanelPlayers');
+        if (container && !this.battleState?.active) {
+          container.innerHTML = '';
+        }
         return;
       }
-
-      const playerId = AuthSystem.currentUser?.uid;
-      if (!phase.rolls || !phase.rolls[playerId]) {
-        return;
-      }
-
-      if (phase.rolls[playerId].roll !== null) {
-        // Já rolou — fecha modal
-        document.getElementById('initiativePlayerModal')?.remove();
-        modalOpen = false;
-        return;
-      }
-
-      if (modalOpen) return; // já está aberto
-      modalOpen = true;
-
-      // Busca initMods e cria modal com modificador correto
-      this._showPlayerInitModal(code, playerId, phase);
-    }, { onlyOnce: false });
+    });
   },
 
-  async _showPlayerInitModal(code, playerId, phase) {
-    const dexMod = phase.rolls[playerId]?.dexMod || 0;
-
-    // Busca initMod do player
-    const initModsSnap = await new Promise((resolve) => {
-      onValue(ref(rtdb, `rooms/${code}/playerInitMods`), s => resolve(s.val() || {}), { onlyOnce: true });
-    });
-    const playerInitMod = initModsSnap[playerId]?.mod;
-    const mod = (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexMod;
-
-    const modal = document.createElement('div');
-    modal.id = 'initiativePlayerModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:10000;';
-    modal.innerHTML = `
-      <div style="background:#1a1208;border:2px solid #c9a84c;border-radius:12px;padding:24px;min-width:350px;text-align:center;">
-        <h3 style="color:#e8c97a;margin:0 0 8px;font-family:'Cinzel',serif;">⏱️ Rolar Iniciativa</h3>
-        <p style="color:#a08050;font-size:0.85rem;margin:0 0 4px;">Role 1d20 para definir a ordem de turno!</p>
-        <p style="color:#c9a84c;font-size:0.8rem;margin:0 0 12px;">Modificador: <strong>${mod >= 0 ? '+' : ''}${mod}</strong></p>
-        <div style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:2rem;color:#e8c97a;font-family:monospace;min-height:3rem;" id="playerInitResult">-</div>
-        <button id="rollInitiativeBtn" style="background:#c9a84c;color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:bold;">
-          🎲 Rolar 1d20
-        </button>
-      </div>
-    `;
-    document.body.appendChild(modal);
-
-    const rollBtn = document.getElementById('rollInitiativeBtn');
-    if (rollBtn) {
-      rollBtn.addEventListener('click', async () => {
-        rollBtn.disabled = true;
-        rollBtn.textContent = 'Rolando...';
-
-        const display = document.getElementById('playerInitResult');
-        const diceRoll = await DiceSystem.rollWithAnimation('1d20', display, { animate: true });
-
-        await this.submitInitiativeRoll({ results: diceRoll.results });
-
-        const roll = diceRoll.results[0];
-        const total = roll + mod;
-        display.style.fontSize = '1.5rem';
-        display.innerHTML = `<span>🎲</span><span style="font-size:2.5rem;color:#e8c97a;">${roll}</span><span style="font-size:1.2rem;color:#a08050;"> + ${mod >= 0 ? '+' : ''}${mod}</span><span style="font-size:1.2rem;color:#a08050;"> = </span><span style="font-size:2.5rem;color:#22c55e;font-weight:bold;">${total}</span>`;
-        rollBtn.textContent = '✅ Rola registrada!';
-
-        ChatSystem.sendMessage(`rolou iniciativa: 🎲 ${roll} (Mod ${mod >= 0 ? '+' : ''}${mod}) → ${total}`, 'action');
-      });
-    }
+  _updatePlayerRollPanel(order) {
+    if (RoomSystem.isMaster) return;
+    this.renderInitiativePanelForPlayers(order);
   },
 
   async startBattle() {

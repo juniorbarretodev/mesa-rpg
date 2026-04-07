@@ -651,8 +651,8 @@
         await SheetSystem.loadOrCreateSheet(roomCode);
         await BattleSystem.initialize();
 
-        // Mostra modal de iniciativa ao jogador quando o mestre iniciar
-        BattleSystem.showPlayerInitiativeModal();
+        // Escuta fase de iniciativa em tempo real e renderiza painel com botão de rolar para players
+        BattleSystem.subscribeToInitiativePhaseForPlayers(roomCode);
 
         SheetSystem.subscribeToSheet(roomCode, renderSheet);
         ChatSystem.subscribeToChat(roomCode, renderChat);
@@ -979,6 +979,9 @@
         }
         if (m.type === 'battle') {
           return `<div class="message message-battle"><span class="message-sender">${m.senderNick}</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div>${m.text}</div></div>`;
+        }
+        if (m.type === 'initiative') {
+          return `<div class="message"><span class="text-muted" style="font-size: 0.75rem;">${time}</span> ${m.text}</div>`;
         }
         return `<div class="message"><span class="message-sender">${m.senderNick}:</span> <span class="text-muted" style="font-size: 0.75rem;">${time}</span><div>${m.text}</div></div>`;
       }).join('');
