@@ -900,11 +900,15 @@
           avatarEl.textContent = sheet.name?.[0]?.toUpperCase() || '?';
         }
       }
-      safe('charName') && (safe('charName')).textContent = sheet.name;
-      safe('charClass') && (safe('charClass')).textContent = `${sheet.class} Nv. ${sheet.level}`;
+      const charNameEl = safe('charName');
+      if (charNameEl) { charNameEl.textContent = sheet.name; }
+      const charClassEl = safe('charClass');
+      if (charClassEl) { charClassEl.textContent = `${sheet.class} Nv. ${sheet.level}`; }
 
-      safe('hpText') && (safe('hpText').textContent = `${sheet.hp} / ${sheet.hpMax}`);
-      safe('hpBar') && (safe('hpBar').style.width = `${(sheet.hp / sheet.hpMax) * 100}%`);
+      const hpTextEl = safe('hpText');
+      if (hpTextEl) { hpTextEl.textContent = `${sheet.hp} / ${sheet.hpMax}`; }
+      const hpBarEl = safe('hpBar');
+      if (hpBarEl) { hpBarEl.style.width = `${(sheet.hp / sheet.hpMax) * 100}%`; }
 
       const statusContainer = document.getElementById('statusBadges');
       statusContainer.innerHTML = (sheet.status || []).map(s =>

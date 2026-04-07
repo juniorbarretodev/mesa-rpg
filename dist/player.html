@@ -490,11 +490,11 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/player-T-ybLkX6.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/sounds-DvokLOTz.js">
-  <link rel="modulepreload" crossorigin href="/assets/dice-B1K2oSAH.js">
-  <link rel="modulepreload" crossorigin href="/assets/battle-E3W_S5g0.js">
-  <link rel="stylesheet" crossorigin href="/assets/sounds-Cb40SYvq.css">
+  <script type="module" crossorigin src="/assets/player-C7RLUfyC.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/sounds-D8zRJubN.js">
+  <link rel="modulepreload" crossorigin href="/assets/dice-DwlbI5xZ.js">
+  <link rel="modulepreload" crossorigin href="/assets/battle-D-ymtSOf.js">
+  <link rel="stylesheet" crossorigin href="/assets/sounds-CCMRs7ij.css">
   <link rel="stylesheet" crossorigin href="/assets/battle-grDkpdPG.css">
 </head>
 
@@ -559,9 +559,15 @@
 
         <section class="main-area">
           <div id="allPlayerCards" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
+          <div id="endTurnWrapper" style="display:none;margin-bottom:8px;text-align:center;">
+            <button id="endTurnBtn" class="btn btn-warning" style="background:#f59e0b;color:#1a1208;border:none;padding:8px 24px;border-radius:6px;font-weight:bold;font-size:0.95rem;cursor:pointer;">
+              ⏭️ Fim da Jogada — Passar a Vez
+            </button>
+          </div>
           <div class="map-viewer" id="mapViewer">
             <div id="mapWrapper" class="map-wrapper">
               <img id="mapImage" class="map-image" style="display: none;">
+              <canvas id="playerDrawCanvas" style="position:absolute;inset:0;z-index:20;pointer-events:none;"></canvas>
               <div id="tokensLayer" class="tokens-layer"></div>
               <div class="map-placeholder" id="mapPlaceholder">
                 <p style="font-size: 3rem; margin-bottom: 1rem;">🗺️</p>
@@ -571,15 +577,21 @@
           </div>
 
           <div class="chat-container mt-md">
-            <div class="dice-quick-panel">
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d4">d4</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d6">d6</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d8">d8</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d10">d10</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d12">d12</button>
-              <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d20">d20</button>
+            <div class="panel" style="background:var(--color-bg-secondary);border-radius:var(--radius-md);padding:0.5rem;">
+              <h3 class="panel-title" style="font-size:0.8rem;">&#x1F3B2; Dados Rápidos</h3>
+              <div class="dice-quick-panel">
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d4">d4</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d6">d6</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d8">d8</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d10">d10</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d12">d12</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d20">d20</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="2d6">2d6</button>
+                <button class="btn btn-secondary btn-sm dice-btn" data-dice="1d100">d100</button>
+              </div>
+              <div class="dice-result" id="diceResult">-</div>
+              <input type="text" id="customDiceInput" class="input" placeholder="Ex: 2d12+3" style="margin-top:4px;font-size:0.8rem;">
             </div>
-            <div class="dice-result" id="diceResult">-</div>
 
             <div class="chat-messages" id="chatMessages"></div>
 
