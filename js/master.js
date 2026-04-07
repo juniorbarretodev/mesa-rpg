@@ -475,7 +475,7 @@ export const MasterSystem = {
             value="${npc.hp}" min="0" max="${npc.hpMax}"
             style="width:36px;text-align:center;background:#0a0705;border:1px solid #8a6a1a;
                    color:#e8d8b0;border-radius:3px;padding:2px;font-size:0.75rem;">
-          <span style="color:#666;font-size:0.7rem;flex-shrink:0;">/${npc.hpMax}</span>
+          <span data-action="hpmax-display" style="color:#666;font-size:0.7rem;flex-shrink:0;">/${npc.hpMax}</span>
           <button data-action="hp-plus"
             style="background:#16a34a;border:none;color:white;width:20px;height:20px;
                    border-radius:3px;cursor:pointer;font-size:0.9rem;flex-shrink:0;">+</button>
@@ -485,6 +485,21 @@ export const MasterSystem = {
           <div data-action="hp-bar"
             style="height:100%;width:${hpPct}%;background:${barBg};transition:width 0.3s;"></div>
         </div>
+      </div>
+
+      <!-- HP Max -->
+      <div style="display:flex;align-items:center;gap:3px;margin-top:6px;">
+        <label style="font-size:0.55rem;color:#8a6a1a;">HP Max:</label>
+        <button data-action="hpmax-minus"
+          style="background:#555;border:none;color:white;width:18px;height:18px;
+                 border-radius:2px;cursor:pointer;font-size:0.75rem;flex-shrink:0;">−</button>
+        <input data-action="hpmax-input" type="number"
+          value="${npc.hpMax}" min="1"
+          style="width:36px;text-align:center;background:#0a0705;border:1px solid #8a6a1a;
+                 color:#e8d8b0;border-radius:3px;padding:2px;font-size:0.65rem;">
+        <button data-action="hpmax-plus"
+          style="background:#555;border:none;color:white;width:18px;height:18px;
+                 border-radius:2px;cursor:pointer;font-size:0.75rem;flex-shrink:0;">+</button>
       </div>
 
       <!-- status -->
@@ -509,14 +524,20 @@ export const MasterSystem = {
     card.addEventListener('click', (e) => {
       const action = e.target.closest('[data-action]')?.dataset.action;
       if (!action) return;
-      if (action === 'remove')   this._removeNpc(npc.id);
-      if (action === 'hp-minus') this._adjustNpcHP(npc.id, -1);
-      if (action === 'hp-plus')  this._adjustNpcHP(npc.id, +1);
-      if (action === 'map')      this.dragNpcToMap(npc.id);
+      if (action === 'remove')       this._removeNpc(npc.id);
+      if (action === 'hp-minus')     this._adjustNpcHP(npc.id, -1);
+      if (action === 'hp-plus')      this._adjustNpcHP(npc.id, +1);
+      if (action === 'hpmax-minus')  this._adjustNpcHPMax(npc.id, -1);
+      if (action === 'hpmax-plus')   this._adjustNpcHPMax(npc.id, +1);
+      if (action === 'map')          this.dragNpcToMap(npc.id);
     });
 
     card.querySelector('[data-action="hp-input"]').addEventListener('change', (e) => {
       this._setNpcHP(npc.id, e.target.value);
+    });
+
+    card.querySelector('[data-action="hpmax-input"]').addEventListener('change', (e) => {
+      this._setNpcHPMax(npc.id, e.target.value);
     });
 
     card.querySelector('[data-action="status"]').addEventListener('change', (e) => {
@@ -540,6 +561,25 @@ export const MasterSystem = {
     this._syncNpcToken(npcId, npc.hp);
   },
 
+  _adjustNpcHPMax(npcId, delta) {
+    const npc = this.npcCards?.[npcId];
+    if (!npc) return;
+    npc.hpMax = Math.max(1, npc.hpMax + delta);
+    if (npc.hp > npc.hpMax) npc.hp = npc.hpMax;
+    const pct = (npc.hp / npc.hpMax) * 100;
+    this._updateNpcCardFull(npcId, npc.hp, npc.hpMax);
+    this._syncNpcToken(npcId, npc.hp);
+  },
+
+  _setNpcHPMax(npcId, value) {
+    const npc = this.npcCards?.[npcId];
+    if (!npc) return;
+    npc.hpMax = Math.max(1, parseInt(value) || 1);
+    if (npc.hp > npc.hpMax) npc.hp = npc.hpMax;
+    this._updateNpcCardFull(npcId, npc.hp, npc.hpMax);
+    this._syncNpcToken(npcId, npc.hp);
+  },
+
   _setNpcHP(npcId, value) {
     const npc = this.npcCards?.[npcId];
     if (!npc) return;
@@ -554,6 +594,22 @@ export const MasterSystem = {
     const inp = document.querySelector(`#npc-card-${npcId} [data-action="hp-input"]`);
     if (bar) { bar.style.width = pct + '%'; bar.style.background = pct>50?'#16a34a':pct>25?'#ca8a04':'#dc2626'; }
     if (inp) inp.value = hp;
+  },
+
+  _updateNpcCardFull(npcId, hp, hpMax) {
+    const card = document.getElementById(`npc-card-${npcId}`);
+    if (!card) return;
+    const pct = Math.max(0, Math.min(100, (hp / hpMax) * 100));
+    const bar = card.querySelector('[data-action="hp-bar"]');
+    const hpInput = card.querySelector('[data-action="hp-input"]');
+    const hpMaxInput = card.querySelector('[data-action="hpmax-input"]');
+    const hpMaxLabel = card.querySelector('[data-action="hpmax-display"]');
+    if (bar) { bar.style.width = pct + '%'; bar.style.background = pct>50?'#16a34a':pct>25?'#ca8a04':'#dc2626'; }
+    if (hpInput) hpInput.value = hp;
+    if (hpMaxInput) hpMaxInput.value = hpMax;
+    // Update the "/MAX" span
+    const maxSpan = card.querySelector('[data-action="hpmax-display"]');
+    if (maxSpan) maxSpan.textContent = `/${hpMax}`;
   },
 
   _setNpcStatus(npcId, status) {
