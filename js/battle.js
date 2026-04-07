@@ -122,11 +122,21 @@ export const BattleSystem = {
     window._initiativePhaseActive = true;
     window._playerInitiativeSubmitted = false;
 
-    // Coleta jogadores + NPCs do mapa
+    // Coleta jogadores + NPCs do mapa (com espera de carregamento dos tokens)
     const players = await this.getRoomPlayers();
-    const npcTokens = Object.values(MapSystem.tokens || {}).filter(
+    let npcTokens = Object.values(MapSystem.tokens || {}).filter(
       t => t.type === 'enemy' || t.type === 'npc' || t.type === 'friendly'
     );
+
+    // Loop de espera: aguarda tokens carregarem no MapSystem (10 tentativas a cada 300ms)
+    const MAX_ATTEMPTS = 10;
+    const WAIT_MS = 300;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS && npcTokens.length === 0; attempt++) {
+      await new Promise(r => setTimeout(r, WAIT_MS));
+      npcTokens = Object.values(MapSystem.tokens || {}).filter(
+        t => t.type === 'enemy' || t.type === 'npc' || t.type === 'friendly'
+      );
+    }
 
     if (players.length === 0 && npcTokens.length === 0) {
       alert('Nenhum jogador ou NPC para rolar iniciativa.');
@@ -136,19 +146,7 @@ export const BattleSystem = {
     // Cria initiativeOrder: players (roll null) + NPCs (auto roll)
     const initiativeOrder = [];
 
-    players.forEach(p => {
-      initiativeOrder.push({
-        id: p.id,
-        name: p.name,
-        type: 'player',
-        dexMod: p.dexMod || 0,
-        roll: null,
-        total: null,
-        avatarUrl: p.avatarUrl || ''
-      });
-    });
-
-    // NPCs auto-rolam 1d20 + initMod
+    // NPCs auto-rolam 1d20 + initMod primeiro
     npcTokens.forEach(token => {
       const roll = Math.floor(Math.random() * 20) + 1;
       // Tenta pegar initMod do NPC card via MasterSystem
@@ -191,6 +189,28 @@ export const BattleSystem = {
         avatarUrl: token.avatarUrl || ''
       });
     });
+
+    // Players vão depois dos NPCs
+    players.forEach(p => {
+      initiativeOrder.push({
+        id: p.id,
+        name: p.name,
+        type: 'player',
+        dexMod: p.dexMod || 0,
+        roll: null,
+        total: null,
+        avatarUrl: p.avatarUrl || ''
+      });
+    });
+
+    // Anuncia rolagens dos NPCs no chat
+    const npcOrder = initiativeOrder.filter(e => e.type === 'npc');
+    for (const npc of npcOrder) {
+      await ChatSystem.sendMessage(
+        `<span style="color:#ef4444;font-weight:bold;">${npc.name}</span> <span style="color:#ef4444;">rolou iniciativa: 🎲 <span style="font-size:1.2rem;font-weight:bold;">${npc.roll}</span> (Mod ${npc.dexMod >= 0 ? '+' : ''}${npc.dexMod}) → <span style="font-size:1.2rem;font-weight:bold;">${npc.total}</span></span>`,
+        'initiative'
+      );
+    }
 
     // Salva initiativeOrder no RTDB
     await set(ref(rtdb, `rooms/${code}/initiativeOrder`), initiativeOrder);
@@ -1095,21 +1115,24 @@ export const BattleSystem = {
       active: false,
       round: 0,
       turn: null,
-      initiative: [],
+      initiative: null,
       pendingAction: null,
       lastModified: Date.now()
     });
     await set(ref(rtdb, `rooms/${code}/initiativePhase`), null);
-    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), []);
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), null);
 
     await ChatSystem.sendMessage('🏆 **BATALHA ENCERRADA!** A situação foi resolvida.', 'system');
 
     this.battleState = null;
     this.initiative = [];
     this.turnIndex = 0;
+    this._cachedInitiativeOrder = null;
     window._initiativePhaseActive = false;
     window._playerInitiativeSubmitted = false;
     document.getElementById('initiativeModal')?.remove();
+    document.getElementById('initiativePanel')?.remove();
+    document.getElementById('initiativePanelPlayers')?.remove();
   },
 
   async nextTurn() {

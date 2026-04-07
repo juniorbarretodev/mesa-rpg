@@ -597,16 +597,8 @@
         });
 
         console.log("[Master] Inicializando Chat e Batalha...");
-        ChatSystem.subscribeToChat(roomCode, (msg) => {
-           // O renderChat original deve ser renderChatMessages se foi renomeado, 
-           // mas verificarei o nome. Pra segurança, usarei as que estavam no master inicial
-           if (typeof renderChatMessages === 'function') renderChatMessages(msg);
-           else if (typeof renderChat === 'function') renderChat(msg);
-        });
-        ChatSystem.subscribeToDice(roomCode, (dice) => {
-           if (typeof renderDiceHistory === 'function') renderDiceHistory(dice);
-           else if (typeof renderRollHistory === 'function') renderRollHistory(dice);
-        });
+        ChatSystem.subscribeToChat(roomCode, renderChat);
+        ChatSystem.subscribeToDice(roomCode, renderRollHistory);
 
         await MasterSystem.initialize();
         await BattleSystem.initialize();
