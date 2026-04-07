@@ -651,9 +651,6 @@
         await SheetSystem.loadOrCreateSheet(roomCode);
         await BattleSystem.initialize();
 
-        // Escuta fase de iniciativa em tempo real e renderiza painel com botão de rolar para players
-        BattleSystem.subscribeToInitiativePhaseForPlayers(roomCode);
-
         SheetSystem.subscribeToSheet(roomCode, renderSheet);
         ChatSystem.subscribeToChat(roomCode, renderChat);
         ChatSystem.subscribeToDice(roomCode, renderDiceFeed);

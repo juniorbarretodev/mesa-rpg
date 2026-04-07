@@ -20,7 +20,9 @@
       "Read(//c/Users/junni/OneDrive/Documentos/Meus-estudos/mesa-rpg/**)",
       "Bash(grep -l \"rolledList\" dist/assets/battle-*.js)",
       "Bash(grep -c \"total !== null && p.roll !== null\" dist/assets/battle-*.js)",
-      "Bash(grep -o \"filter.*total\" dist/assets/battle-*.js)"
+      "Bash(grep -o \"filter.*total\" dist/assets/battle-*.js)",
+      "Bash(ls js/main*.js)",
+      "Bash(ls *.js)"
     ]
   }
 }
