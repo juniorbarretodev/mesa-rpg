@@ -118,6 +118,10 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
+    // Reset flags for new initiative round
+    window._initiativePhaseActive = true;
+    window._playerInitiativeSubmitted = false;
+
     // Coleta jogadores + NPCs do mapa
     const players = await this.getRoomPlayers();
     const npcTokens = Object.values(MapSystem.tokens || {}).filter(
@@ -150,9 +154,31 @@ export const BattleSystem = {
       // Tenta pegar initMod do NPC card via MasterSystem
       let initMod = 0;
       if (window.MasterSystem?.npcCards) {
+        // First try exact npcCardId match
         const npcCard = Object.values(window.MasterSystem.npcCards)
-          .find(n => n.id === token.npcCardId || n.name === token.name);
-        if (npcCard) initMod = npcCard.initMod || 0;
+          .find(n => token.npcCardId && n.id === token.npcCardId);
+        if (npcCard) {
+          initMod = npcCard.initMod || 0;
+        } else {
+          // Fallback: try matching by type + color for tokens without npcCardId
+          const matches = Object.values(window.MasterSystem.npcCards)
+            .filter(n => {
+              const typeMatch = n.type === token.type ||
+                (n.alignment === token.type) ||
+                (n.type === token.type);
+              return typeMatch && n.name === token.name && n.color === token.color;
+            });
+          if (matches.length === 1) {
+            initMod = matches[0].initMod || 0;
+          } else {
+            // Last resort: match by name only
+            const nameMatches = Object.values(window.MasterSystem.npcCards)
+              .filter(n => n.name === token.name);
+            if (nameMatches.length === 1) {
+              initMod = nameMatches[0].initMod || 0;
+            }
+          }
+        }
       }
       initiativeOrder.push({
         id: token.id,
@@ -298,11 +324,48 @@ export const BattleSystem = {
         [`rolls/${playerId}.mod`]: mod
       });
 
+      // Atualiza o initiativeOrder local do player para mostrar na UI
+      this._onPlayerInitiativeUpdate(code, phase.rolls);
+
       SoundManager.playDiceRoll();
       setTimeout(() => SoundManager.playDiceLand(), 300);
     } catch (e) {
       console.error('Battle: Error submitting initiative roll:', e);
     }
+  },
+
+  // Atualiza local do player a ordem de iniciativa enquanto rolagens estão sendo feitas
+  _onPlayerInitiativeUpdate(code, rolls) {
+    const order = this._buildRealtimeOrder(rolls);
+    this._cachedInitiativeOrder = order;
+    this.renderInitiativePanelForPlayers(order);
+  },
+
+  _buildRealtimeOrder(rolls) {
+    if (!rolls) return [];
+    // orderData tem o baseline com NPC rolls já feitos (phase.rolls tem só players)
+    const orderData = this._cachedInitiativeOrder || [];
+    const npcRolls = orderData.filter(p => p.type === 'npc').map(p => ({ ...p }));
+
+    const playerRolls = Object.values(rolls).map(p => ({
+      id: p.id,
+      name: p.name,
+      type: 'player',
+      dexMod: p.mod ?? p.dexMod ?? 0,
+      roll: p.roll,
+      total: p.total,
+      avatarUrl: p.avatarUrl || ''
+    }));
+
+    const all = [...playerRolls, ...npcRolls];
+    // Ordena por total desc, nulls por último
+    all.sort((a, b) => {
+      if (a.total === null && b.total === null) return 0;
+      if (a.total === null) return 1;
+      if (b.total === null) return -1;
+      return b.total - a.total;
+    });
+    return all;
   },
 
   // Mestre finaliza a fase de iniciativa e resolve a ordem
@@ -459,13 +522,14 @@ export const BattleSystem = {
     if (!npc) return;
 
     const roll = Math.floor(Math.random() * 20) + 1;
+    const initMod = npc.initMod || 0;
     const entry = {
       id: npc.id || `npc_init_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       name: npc.name,
       type: 'npc',
-      dexMod: 0,
+      dexMod: initMod,
       roll: roll,
-      total: roll,
+      total: roll + initMod,
       npcCardId: npcId,
       avatarUrl: npc.avatarUrl || ''
     };
@@ -492,6 +556,7 @@ export const BattleSystem = {
     const listener = onValue(orderRef, (snap) => {
       const order = snap.val();
       if (order && Array.isArray(order)) {
+        this._cachedInitiativeOrder = order;
         if (RoomSystem.isMaster) {
           this.renderInitiativePanel(order);
         } else {
@@ -499,12 +564,44 @@ export const BattleSystem = {
         }
       } else {
         // Remove painéis se iniciativa não existe
+        this._cachedInitiativeOrder = null;
         document.getElementById('initiativePanel')?.remove();
         document.getElementById('initiativePanelPlayers')?.remove();
       }
     });
 
     this.initiativeListeners.push({ ref: orderRef, listener });
+
+    // Players also subscribe to initiativePhase for real-time sorted ordering
+    if (!RoomSystem.isMaster) {
+      const phaseRef = ref(rtdb, `rooms/${code}/initiativePhase`);
+      const phaseListener = onValue(phaseRef, (snap) => {
+        const phase = snap.val();
+        if (!phase || !phase.active || !phase.rolls) {
+          window._initiativePhaseActive = false;
+          return;
+        }
+
+        // Track initiative phase state for d20 auto-capture
+        window._initiativePhaseActive = true;
+
+        // If current player already rolled, set flag
+        const myUid = AuthSystem.currentUser?.uid;
+        if (phase.rolls[myUid]?.roll !== null && phase.rolls[myUid]?.roll !== undefined) {
+          window._playerInitiativeSubmitted = true;
+        }
+
+        // Build merged order: player rolls + existing npc rolls
+        const allRolls = { ...phase.rolls };
+        const order = this._buildRealtimeOrder(allRolls);
+        this._cachedInitiativeOrder = order;
+        this.renderInitiativePanelForPlayers(order);
+      }, (err) => {
+        console.error('Battle: initiativePhase subscription error:', err);
+      });
+
+      this.initiativeListeners.push({ ref: phaseRef, listener: phaseListener });
+    }
   },
 
   renderInitiativePanel(order) {
@@ -929,6 +1026,8 @@ export const BattleSystem = {
     this.battleState = null;
     this.initiative = [];
     this.turnIndex = 0;
+    window._initiativePhaseActive = false;
+    window._playerInitiativeSubmitted = false;
     document.getElementById('initiativeModal')?.remove();
   },
 

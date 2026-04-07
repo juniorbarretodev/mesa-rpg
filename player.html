@@ -1155,15 +1155,12 @@
         const result = await DiceSystem.rollWithAnimation(dice, null, { animate: false });
         document.getElementById('diceResult').textContent = DiceSystem.formatResult(result);
 
-        // Auto-captura 1d20 para iniciativa se estiver na fase de iniciativa
-        if (dice === '1d20' && !window._playerInitiativeRollCaptured) {
-          window._playerInitiativeRollCaptured = true;
-          if (BattleSystem?.battleState?.active) {
-            // Batalha ativa — verificar se o player já tem rolagem de iniciativa
-            const playerId = AuthSystem.currentUser?.uid;
-            if (playerId) {
-              BattleSystem.submitInitiativeRoll(result.results);
-            }
+        // Auto-captura 1d20 para iniciativa enquanto fase de iniciativa estiver ativa
+        if (dice === '1d20' && window._initiativePhaseActive && !window._playerInitiativeSubmitted) {
+          window._playerInitiativeSubmitted = true;
+          const playerId = AuthSystem.currentUser?.uid;
+          if (playerId) {
+            BattleSystem.submitInitiativeRoll(result.results);
           }
         }
 
@@ -1173,7 +1170,7 @@
       });
     });
 
-    // Custom dice input (Enter key)
+    // Custom dice input (Enter key) — auto-captura 1d20 para iniciativa
     document.getElementById('customDiceInput')?.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -1182,19 +1179,14 @@
           const display = document.getElementById('diceResult');
           document.getElementById('customDiceInput').value = '';
           DiceSystem.rollWithAnimation(input, display, { animate: true }).then(result => {
-            display.textContent = DiceSystem.formatResult(result);
-
-            // Auto-captura 1d20 para iniciativa via input customizado
-            if (input.match(/^1d20/i) && !window._playerInitiativeRollCaptured) {
-              window._playerInitiativeRollCaptured = true;
-              if (BattleSystem?.battleState?.active) {
-                const playerId = AuthSystem.currentUser?.uid;
-                if (playerId) {
-                  BattleSystem.submitInitiativeRoll(result.results);
-                }
+            if (input.match(/^1d20/i) && window._initiativePhaseActive && !window._playerInitiativeSubmitted) {
+              window._playerInitiativeSubmitted = true;
+              const playerId = AuthSystem.currentUser?.uid;
+              if (playerId) {
+                BattleSystem.submitInitiativeRoll(result.results);
               }
             }
-
+            display.textContent = DiceSystem.formatResult(result);
             ChatSystem.sendRoll(input, result.results, result.total, 'Teste');
             SoundManager.playDiceRoll();
             setTimeout(() => SoundManager.playDiceLand(), 300);
