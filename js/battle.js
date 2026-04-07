@@ -249,12 +249,12 @@ export const BattleSystem = {
         const uid = docSnap.id;
         if (uid === masterUid) return;
 
-        const dexVal = s.attributes?.dexterity?.value ?? s.attributes?.destreza?.value ?? 0;
-        const dexMod = Math.floor((parseInt(dexVal) - 10) / 2);
+        const dexVal = s.attributes?.dexterity?.value ?? s.attributes?.destreza?.value;
+        const dexMod = dexVal !== undefined ? Math.floor((parseInt(dexVal) - 10) / 2) : 0;
 
-        // initMod do player card sobrepõe DEX mod
+        // initMod do player card sobrepõe DEX mod; nunca negativo
         const initMod = initMods?.[uid]?.mod;
-        const finalMod = initMod !== undefined && initMod !== null ? initMod : dexMod;
+        const finalMod = Math.max(0, initMod !== undefined && initMod !== null ? initMod : dexMod);
 
         const nick = presenceSnap?.[uid]?.nick || s.nick || s.name || 'Jogador';
 
@@ -318,10 +318,10 @@ export const BattleSystem = {
         return;
       }
 
-      // Sempre usa o initMod do RTDB (definido pelo jogador no card); fallback para DEX
+      // Sempre usa o initMod do RTDB (definido pelo jogador no card); fallback para DEX (nunca negativo)
       const playerInitMod = initMods[playerId]?.mod ?? initMods[playerId.toLowerCase()]?.mod;
-      const dexMod = playerEntry.dexMod || 0;
-      const mod = (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexMod;
+      const dexModVal = playerEntry.dexMod !== undefined && playerEntry.dexMod !== null ? playerEntry.dexMod : 0;
+      const mod = Math.max(0, (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexModVal);
       const total = rollVal + mod;
 
       await update(initRef, {
@@ -331,6 +331,13 @@ export const BattleSystem = {
       });
 
       console.log(`Battle: Initiative rolled for ${playerEntry.name}: ${rollVal} + ${mod} = ${total}`);
+
+      // Send initiative result to chat in purple
+      const nick = AuthSystem.currentNick || AuthSystem.currentUser?.displayName || 'Jogador';
+      await ChatSystem.sendMessage(
+        `<span style="color:#a855f7;font-weight:bold;">${nick}</span> <span style="color:#a855f7;">rolou iniciativa: 🎲 <span style="font-size:1.2rem;font-weight:bold;">${rollVal}</span> (Mod ${mod >= 0 ? '+' : ''}${mod}) → <span style="font-size:1.2rem;font-weight:bold;">${total}</span></span>`,
+        'initiative'
+      );
 
       // Refresh from RTDB to get the correct updated rolls
       this._refreshInitiativeOrderFromRTDB();
@@ -743,9 +750,10 @@ export const BattleSystem = {
     const isMyTurn = this.battleState?.active && this.battleState?.turn === AuthSystem.currentUser?.uid;
     const myId = AuthSystem.currentUser?.uid;
 
-    // Check if current player still needs to roll
+    // Only show roll button if phase is still active and player hasn't rolled yet
+    const phaseActive = this._phaseActive !== false;
     const myEntry = order.find(p => p.id === myId);
-    const needsToRoll = myEntry && (myEntry.roll === null || myEntry.roll === undefined);
+    const needsToRoll = phaseActive && myEntry && (myEntry.roll === null || myEntry.roll === undefined);
 
     let rollButtonHtml = '';
     if (needsToRoll) {
@@ -757,11 +765,14 @@ export const BattleSystem = {
           </button>
         </div>
       `;
-    } else if (myEntry && myEntry.roll !== null) {
-      const modStr = myEntry.dexMod !== undefined ? (myEntry.dexMod >= 0 ? `+${myEntry.dexMod}` : `${myEntry.dexMod}`) : '';
+    } else if (myEntry && myEntry.roll !== null && myEntry.roll !== undefined) {
+      const rollDisplay = myEntry.roll !== undefined && myEntry.roll !== null ? myEntry.roll : '?';
+      const modVal = myEntry.dexMod !== undefined && myEntry.dexMod !== null ? myEntry.dexMod : 0;
+      const totalDisplay = myEntry.total !== undefined && myEntry.total !== null ? myEntry.total : '';
+      const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
       rollButtonHtml = `
         <div style="padding:6px 8px;margin-bottom:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:6px;text-align:center;">
-          <span style="color:#22c55e;font-size:0.8rem;font-family:monospace;">✅ Iniciativa: ${myEntry.roll} ${modStr} = ${myEntry.total}</span>
+          <span style="color:#22c55e;font-size:0.8rem;font-family:monospace;">✅ Iniciativa: ${rollDisplay} ${modStr} = ${totalDisplay}</span>
         </div>
       `;
     }
@@ -776,7 +787,8 @@ export const BattleSystem = {
             const isFirst = pos === 1;
             const isCurrent = this.battleState?.turn === (p.id || p);
             const roll = p.roll !== undefined && p.roll !== null ? p.roll : '?';
-            const modStr = p.dexMod !== undefined ? (p.dexMod >= 0 ? `+${p.dexMod}` : `${p.dexMod}`) : '';
+            const modVal = p.dexMod !== undefined && p.dexMod !== null ? p.dexMod : 0;
+            const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
             const total = p.total !== undefined && p.total !== null ? p.total : '';
             const typeLabel = p.type === 'npc' || p.type === 'enemy' ? '🔴' : '';
             return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;margin:2px 0;
@@ -790,62 +802,34 @@ export const BattleSystem = {
                 ${typeLabel} ${p.name} ${p.id === myId ? '(você)' : ''}
                 ${isCurrent && isMyTurn ? '<span style="color:#22c55e;font-weight:bold;"> — SUA VEZ!</span>' : ''}
               </span>
-              ${p.dexMod !== undefined ? `<span style="color:#a08050;font-size:0.65rem;font-family:monospace;">${roll} ${modStr} = ${total}</span>` : `<span style="color:#a08050;font-size:0.65rem;font-family:monospace;">= ${total}</span>`}
+              <span style="color:#a08050;font-size:0.65rem;font-family:monospace;">${roll} ${modStr} = ${total}</span>
             </div>`;
           }).join('')}
         </div>
       </div>
     `;
 
-    // Wire up the roll button
-    if (needsToRoll) {
-      const rollBtn = document.getElementById('playerInitRollBtn');
-      if (rollBtn) {
-        rollBtn.addEventListener('click', async () => {
-          rollBtn.disabled = true;
-          rollBtn.innerHTML = '⏳ Rolando...';
+    const rollBtn = document.getElementById('playerInitRollBtn');
+    if (rollBtn && needsToRoll) {
+      rollBtn.addEventListener('click', async () => {
+        if (rollBtn.disabled) return;
 
-          const rollVal = Math.floor(Math.random() * 20) + 1;
+        rollBtn.disabled = true;
+        rollBtn.innerHTML = '⏳ Rolando...';
 
-          // Get player's init mod
-          const code = RoomSystem.currentRoomCode;
-          let mod = 0;
-          try {
-            const initModsSnap = await new Promise((resolve) => {
-              onValue(ref(rtdb, `rooms/${code}/playerInitMods`), s => resolve(s.val() || {}), { onlyOnce: true });
-            });
-            const phaseSnap = await new Promise((resolve) => {
-              onValue(ref(rtdb, `rooms/${code}/initiativePhase`), s => resolve(s.val()), { onlyOnce: true });
-            });
-            const playerInitMod = initModsSnap[myId]?.mod ?? initModsSnap[myId.toLowerCase()]?.mod;
-            const dexMod = phaseSnap?.rolls?.[myId]?.dexMod ?? 0;
-            mod = (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexMod;
-          } catch (e) {
-            console.warn('Battle: Could not fetch player init mod, using 0');
-          }
+        const rollVal = Math.floor(Math.random() * 20) + 1;
 
-          const total = rollVal + mod;
+        // Submit roll to RTDB — submit calculates mod and total authoritatively
+        await this.submitInitiativeRoll({ results: [rollVal] });
 
-          // Submit roll to RTDB
-          await this.submitInitiativeRoll({ results: [rollVal] });
+        // Small delay then refresh panel from authoritative source (phase rolls in RTDB)
+        setTimeout(() => {
+          this._renderPanelWithPhase();
+        }, 300);
 
-          // Send to chat with purple text
-          const nick = AuthSystem.currentNick || AuthSystem.currentUser?.displayName || 'Jogador';
-          await ChatSystem.sendMessage(
-            `<span style="color:#a855f7;font-weight:bold;">${nick}</span> <span style="color:#a855f7;">rolou iniciativa: 🎲 <span style="font-size:1.2rem;font-weight:bold;">${rollVal}</span> (Mod ${mod >= 0 ? '+' : ''}${mod}) → <span style="font-size:1.2rem;font-weight:bold;">${total}</span></span>`,
-            'initiative'
-          );
-
-          // Update button to show success
-          rollBtn.disabled = true;
-          rollBtn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
-          rollBtn.style.boxShadow = '0 2px 8px rgba(34,197,94,0.4)';
-          rollBtn.innerHTML = `✅ ${rollVal} ${mod >= 0 ? '+' : ''}${mod} = ${total}`;
-
-          SoundManager.playDiceRoll();
-          setTimeout(() => SoundManager.playDiceLand(), 300);
-        });
-      }
+        SoundManager.playDiceRoll();
+        setTimeout(() => SoundManager.playDiceLand(), 300);
+      });
     }
   },
 
@@ -972,28 +956,61 @@ export const BattleSystem = {
     const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
     const initiativeOrderRef = ref(rtdb, `rooms/${code}/initiativeOrder`);
 
+    // Listen to BOTH order and phase changes so the panel updates in realtime
     onValue(initiativeOrderRef, (orderSnap) => {
       const order = orderSnap.val() || [];
       this._cachedInitiativeOrder = order;
-
-      this._updatePlayerRollPanel(order);
+      this._renderPanelWithPhase();
     });
 
     onValue(initRef, (phaseSnap) => {
       const phase = phaseSnap.val();
-      if (!phase || !phase.active) {
-        const container = document.getElementById('initiativePanelPlayers');
-        if (container && !this.battleState?.active) {
-          container.innerHTML = '';
-        }
-        return;
-      }
+      this._phaseActive = phase?.active || false;
+      this._initPhaseRolls = phase?.rolls || {};
+      this._renderPanelWithPhase();
     });
   },
 
-  _updatePlayerRollPanel(order) {
+  _renderPanelWithPhase() {
     if (RoomSystem.isMaster) return;
-    this.renderInitiativePanelForPlayers(order);
+    const phaseRolls = this._initPhaseRolls || {};
+    const phaseActive = this._phaseActive || false;
+
+    // If phase was never set yet, wait
+    if (!phaseActive && this._phaseActive === undefined) return;
+
+    // Build the complete order from cached initiativeOrder (NPCs) + phase (players)
+    const cached = this._cachedInitiativeOrder || [];
+    const npcEntries = cached.filter(p => p.type === 'npc' || p.type === 'enemy').map(p => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      dexMod: p.dexMod !== undefined && p.dexMod !== null ? p.dexMod : 0,
+      roll: p.roll !== undefined && p.roll !== null ? p.roll : null,
+      total: p.total !== undefined && p.total !== null ? p.total : null,
+      npcCardId: p.npcCardId || null,
+      avatarUrl: p.avatarUrl || ''
+    }));
+
+    const playerEntries = Object.values(phaseRolls).map(p => ({
+      id: p.id,
+      name: p.name,
+      type: 'player',
+      dexMod: p.mod !== undefined && p.mod !== null ? p.mod : (p.dexMod !== undefined && p.dexMod !== null ? p.dexMod : 0),
+      roll: p.roll !== undefined && p.roll !== null ? p.roll : null,
+      total: p.total !== undefined && p.total !== null ? p.total : null,
+      avatarUrl: p.avatarUrl || ''
+    }));
+
+    const all = [...playerEntries, ...npcEntries];
+    all.sort((a, b) => {
+      if (a.total === null && b.total === null) return 0;
+      if (a.total === null) return 1;
+      if (b.total === null) return -1;
+      return b.total - a.total;
+    });
+
+    this.renderInitiativePanelForPlayers(all);
   },
 
   async startBattle() {

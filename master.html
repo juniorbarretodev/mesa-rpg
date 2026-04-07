@@ -819,8 +819,29 @@
       ctx: null,
 
       init() {
-        this.canvas = document.getElementById('drawCanvas');
-        if (!this.canvas) return;
+        // If canvas was already set externally (e.g., by MapSystem), reuse it
+        if (!this.canvas) {
+          this.canvas = document.getElementById('mapDrawingCanvas');
+        }
+        if (!this.canvas) {
+          this.canvas = document.getElementById('drawCanvas');
+        }
+        if (!this.canvas) {
+          // Create canvas dynamically as fallback (overlay on mapContainer)
+          const mapContainer = document.getElementById('mapContainer');
+          if (!mapContainer) return;
+
+          this.canvas = document.createElement('canvas');
+          this.canvas.id = 'drawCanvas';
+          this.canvas.className = 'map-drawing-canvas';
+          this.canvas.style.cssText = 'position:absolute;top:0;left:0;z-index:20;pointer-events:none;';
+          const mapImage = mapContainer.querySelector('#mapImage');
+          if (mapImage) {
+            mapContainer.insertBefore(this.canvas, mapImage.nextSibling);
+          } else {
+            mapContainer.appendChild(this.canvas);
+          }
+        }
         this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -892,6 +913,7 @@
 
       setTool(tool) {
         this.tool = (this.tool === tool) ? 'none' : tool;
+        if (!this.canvas) return;
         this.canvas.style.pointerEvents = this.tool !== 'none' ? 'all' : 'none';
         this.canvas.style.cursor = this.tool === 'pen' ? 'crosshair' : this.tool === 'eraser' ? 'cell' : 'default';
         document.getElementById('btnPen')?.style.setProperty('border-color',    this.tool === 'pen'    ? '#e8c97a' : '#8a6a1a');
@@ -899,7 +921,8 @@
       },
 
       clear() {
-        if (this.ctx) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (!this.ctx || !this.canvas) return;
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         // Clear from RTDB so it syncs to players too
         const code = RoomSystem.currentRoomCode;
         if (code) set(ref(rtdb, `rooms/${code}/map/drawing`), null).catch(() => {});
