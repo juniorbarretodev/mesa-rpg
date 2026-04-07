@@ -12,8 +12,8 @@ export const BattleSystem = {
   battleState: null,
   listeners: [],
   initiativeListeners: [],
-  playerAbilities: {}, // Mantido por compatibilidade
-  participantsData: {}, // Cache completo das fichas (HP, recursos, etc)
+  playerAbilities: {},
+  participantsData: {},
   currentTurn: null,
   turnIndex: 0,
   initiative: [],
@@ -65,15 +65,7 @@ export const BattleSystem = {
     if (state.active && state.initiative) {
       this.updateBattleUI(true);
       if (!RoomSystem.isMaster) {
-        // For players: only show participants who have actually rolled
-        const initiativeList = [];
-        for (const p of state.initiative) {
-          if (p.total !== null && p.total !== undefined && p.roll !== null && p.roll !== undefined) {
-            initiativeList.push(p);
-          }
-        }
-        initiativeList.sort((a, b) => b.total - a.total);
-        this.renderInitiativePanelForPlayers(initiativeList);
+        this._renderPanelForPlayers();
       } else {
         this.updateTurnIndicator(state);
       }
@@ -121,16 +113,13 @@ export const BattleSystem = {
 
   // ── SISTEMA DE INICIATIVA ──────────────────────────────
 
-  // Inicia fase de iniciativa para a batalha
   async startInitiativePhase() {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
-    // Reset flags for new initiative round
     window._initiativePhaseActive = true;
     window._playerInitiativeSubmitted = false;
 
-    // Coleta jogadores + NPCs do mapa
     const players = await this.getRoomPlayers();
     const npcTokens = Object.values(MapSystem.tokens || {}).filter(
       t => t.type === 'enemy' || t.type === 'npc' || t.type === 'friendly'
@@ -141,45 +130,22 @@ export const BattleSystem = {
       return;
     }
 
-    // Cria initiativeOrder: players (roll null) + NPCs (auto roll)
-    const initiativeOrder = [];
-
-    players.forEach(p => {
-      initiativeOrder.push({
-        id: p.id,
-        name: p.name,
-        type: 'player',
-        dexMod: p.dexMod || 0,
-        roll: null,
-        total: null,
-        avatarUrl: p.avatarUrl || ''
-      });
-    });
-
-    // NPCs auto-rolam 1d20 + initMod
+    // NPCs auto-rolam imediatamente com 1d20 + initMod
+    const npcEntries = [];
     npcTokens.forEach(token => {
       const roll = Math.floor(Math.random() * 20) + 1;
-      // Tenta pegar initMod do NPC card via MasterSystem
       let initMod = 0;
       if (window.MasterSystem?.npcCards) {
-        // First try exact npcCardId match
         const npcCard = Object.values(window.MasterSystem.npcCards)
           .find(n => token.npcCardId && n.id === token.npcCardId);
         if (npcCard) {
           initMod = npcCard.initMod || 0;
         } else {
-          // Fallback: try matching by type + color for tokens without npcCardId
           const matches = Object.values(window.MasterSystem.npcCards)
-            .filter(n => {
-              const typeMatch = n.type === token.type ||
-                (n.alignment === token.type) ||
-                (n.type === token.type);
-              return typeMatch && n.name === token.name && n.color === token.color;
-            });
+            .filter(n => n.name === token.name && n.color === token.color);
           if (matches.length === 1) {
             initMod = matches[0].initMod || 0;
           } else {
-            // Last resort: match by name only
             const nameMatches = Object.values(window.MasterSystem.npcCards)
               .filter(n => n.name === token.name);
             if (nameMatches.length === 1) {
@@ -188,7 +154,7 @@ export const BattleSystem = {
           }
         }
       }
-      initiativeOrder.push({
+      npcEntries.push({
         id: token.id,
         name: token.name,
         type: 'npc',
@@ -200,10 +166,10 @@ export const BattleSystem = {
       });
     });
 
-    // Salva initiativeOrder no RTDB
-    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), initiativeOrder);
+    // Salva apenas NPCs no initiativeOrder (players entrarao quando rolarem)
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), npcEntries);
 
-    // Guarda phase.rolls apenas para players rolarem manualmente
+    // Cria phase.rolls para todos os players rolarem
     const playerRolls = {};
     players.forEach(p => {
       playerRolls[p.id] = {
@@ -211,7 +177,8 @@ export const BattleSystem = {
         name: p.name,
         dexMod: p.dexMod || 0,
         roll: null,
-        total: null
+        total: null,
+        avatarUrl: p.avatarUrl || ''
       };
     });
 
@@ -223,14 +190,13 @@ export const BattleSystem = {
     });
 
     await ChatSystem.sendMessage(
-      '⏱️ Iniciativa! Jogadores rolem 1d20. NPCs já rolaram automaticamente.',
+      '⏱️ Iniciativa! Jogadores rolem 1d20. NPCs ja rolaram automaticamente.',
       'system'
     );
 
     SoundManager.playBattleStart();
   },
 
-  // Retorna jogadores da sala com dados da ficha (inclui initMod do player card)
   async getRoomPlayers() {
     const code = RoomSystem.currentRoomCode;
     if (!code) return [];
@@ -242,7 +208,6 @@ export const BattleSystem = {
       const snap = await getDocs(sheetsRef);
       const masterUid = RoomSystem.currentRoom?.masterId;
 
-      // Carrega presença e initMods em paralelo
       const [presenceSnap, initMods] = await Promise.all([
         new Promise((resolve) => {
           onValue(ref(rtdb, `rooms/${code}/presence`), (s) => resolve(s.val()), { onlyOnce: true });
@@ -260,7 +225,6 @@ export const BattleSystem = {
         const dexVal = s.attributes?.dexterity?.value ?? s.attributes?.destreza?.value;
         const dexMod = dexVal !== undefined ? Math.floor((parseInt(dexVal) - 10) / 2) : 0;
 
-        // initMod do player card sobrepõe DEX mod; nunca negativo
         const initMod = initMods?.[uid]?.mod;
         const finalMod = Math.max(0, initMod !== undefined && initMod !== null ? initMod : dexMod);
 
@@ -309,10 +273,9 @@ export const BattleSystem = {
         return;
       }
 
-      // Try with both uid and lowercase uid fallback
+      // Try uid and lowercase fallback
       let playerEntry = phase.rolls[playerId];
-      if (!playerEntry && (playerId.toLowerCase?.())) {
-        // Also check lowercase variant (some RTDB keys get normalized)
+      if (!playerEntry && playerId.toLowerCase?.()) {
         playerEntry = phase.rolls[playerId.toLowerCase()];
       }
       if (!playerEntry) {
@@ -326,7 +289,7 @@ export const BattleSystem = {
         return;
       }
 
-      // Sempre usa o initMod do RTDB (definido pelo jogador no card); fallback para DEX (nunca negativo)
+      // Usa initMod do RTDB; fallback DEX
       const playerInitMod = initMods[playerId]?.mod ?? initMods[playerId.toLowerCase()]?.mod;
       const dexModVal = playerEntry.dexMod !== undefined && playerEntry.dexMod !== null ? playerEntry.dexMod : 0;
       const mod = Math.max(0, (playerInitMod !== undefined && playerInitMod !== null) ? playerInitMod : dexModVal);
@@ -340,15 +303,14 @@ export const BattleSystem = {
 
       console.log(`Battle: Initiative rolled for ${playerEntry.name}: ${rollVal} + ${mod} = ${total}`);
 
-      // Send initiative result to chat in purple
       const nick = AuthSystem.currentNick || AuthSystem.currentUser?.displayName || 'Jogador';
       await ChatSystem.sendMessage(
         `<span style="color:#a855f7;font-weight:bold;">${nick}</span> <span style="color:#a855f7;">rolou iniciativa: 🎲 <span style="font-size:1.2rem;font-weight:bold;">${rollVal}</span> (Mod ${mod >= 0 ? '+' : ''}${mod}) → <span style="font-size:1.2rem;font-weight:bold;">${total}</span></span>`,
         'initiative'
       );
 
-      // Refresh from RTDB to get the correct updated rolls
-      this._refreshInitiativeOrderFromRTDB();
+      // Marca flag local imediatamente para esconder o botao
+      window._playerInitiativeSubmitted = true;
 
       SoundManager.playDiceRoll();
       setTimeout(() => SoundManager.playDiceLand(), 300);
@@ -357,65 +319,447 @@ export const BattleSystem = {
     }
   },
 
-  // Atualiza local do player a ordem de iniciativa enquanto rolagens estão sendo feitas
-  _onPlayerInitiativeUpdate(code, rolls) {
-    const order = this._buildRealtimeOrder(rolls);
-    this._cachedInitiativeOrder = order;
-    this.renderInitiativePanelForPlayers(order);
-  },
+  // ── RENDER UNIFICADO PARA PLAYERS ─────────────────────
+  // Combina NPCs (do initiativeOrder) + players que ja rolaram (do initiativePhase)
+  // Apenas quem ja rolou aparece na lista.
 
-  // Called after submit to update with correct roll data
-  _refreshInitiativeOrderFromRTDB() {
-    const code = RoomSystem.currentRoomCode;
-    if (!code) return;
-    onValue(ref(rtdb, `rooms/${code}/initiativePhase`), (snap) => {
-      const phase = snap.val();
-      if (phase?.active && phase.rolls) {
-        const allRolls = { ...phase.rolls };
-        const order = this._buildRealtimeOrder(allRolls);
-        this._cachedInitiativeOrder = order;
-        this.renderInitiativePanelForPlayers(order);
-      }
-    }, { onlyOnce: true });
-  },
-
-  _buildRealtimeOrder(rolls) {
-    if (!rolls) return [];
-    // orderData tem o baseline com NPC rolls já feitos (phase.rolls tem só players)
-    const orderData = this._cachedInitiativeOrder || [];
-    const npcRolls = orderData.filter(p => (p.type === 'npc' || p.type === 'enemy') && p.roll !== null).map(p => ({ ...p }));
-
-    const playerRolls = Object.values(rolls).filter(p => p.roll !== null && p.roll !== undefined).map(p => ({
+  _buildPlayerViewList() {
+    const npcEntries = this._cachedInitiativeOrder?.filter(p =>
+      (p.type === 'npc' || p.type === 'enemy') && p.roll !== null && p.roll !== undefined
+    ).map(p => ({
       id: p.id,
       name: p.name,
-      type: 'player',
-      dexMod: p.mod ?? p.dexMod ?? 0,
-      roll: p.roll !== undefined && p.roll !== null ? p.roll : null,
-      total: p.total !== undefined && p.total !== null ? p.total : null,
+      type: p.type,
+      dexMod: p.dexMod ?? 0,
+      roll: p.roll,
+      total: p.total,
+      npcCardId: p.npcCardId || null,
       avatarUrl: p.avatarUrl || ''
-    }));
+    })) || [];
 
-    const all = [...playerRolls, ...npcRolls];
-    // Sort desc (only players with rolls are in the list)
-    all.sort((a, b) => b.total - a.total);
-    return all;
+    const phaseRolls = this._phaseRolls || {};
+    const playerEntries = Object.values(phaseRolls)
+      .filter(p => p.roll !== null && p.roll !== undefined)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        type: 'player',
+        dexMod: p.mod ?? p.dexMod ?? 0,
+        roll: p.roll,
+        total: p.total,
+        avatarUrl: p.avatarUrl || ''
+      }));
+
+    // Merge evitando duplicatas (phaseRolls tem precedencia)
+    const merged = [...playerEntries];
+    for (const npc of npcEntries) {
+      if (!merged.find(e => e.id === npc.id)) {
+        merged.push(npc);
+      }
+    }
+
+    // Ordena por total decrescente
+    merged.sort((a, b) => b.total - a.total);
+    return merged;
   },
 
-  // Mestre finaliza a fase de iniciativa e resolve a ordem
+  _renderPanelForPlayers() {
+    let container = document.getElementById('initiativePanelPlayers');
+    if (!container) {
+      const mapViewer = document.getElementById('mapViewer');
+      if (!mapViewer) return;
+      container = document.createElement('div');
+      container.id = 'initiativePanelPlayers';
+      mapViewer.parentNode.insertBefore(container, mapViewer);
+    }
+
+    const myId = AuthSystem.currentUser?.uid;
+    const isMyTurn = this.battleState?.active && this.battleState?.turn === myId;
+    const phaseActive = this._phaseActive || false;
+    const phaseRolls = this._phaseRolls || {};
+    const myPhaseEntry = phaseRolls[myId];
+
+    const needsToRoll = phaseActive && myPhaseEntry && (myPhaseEntry.roll === null || myPhaseEntry.roll === undefined);
+    const hasRolled = myPhaseEntry && myPhaseEntry.roll !== null && myPhaseEntry.roll !== undefined;
+
+    // Build list: only NPCs + players who have rolled
+    const rolledList = this._buildPlayerViewList();
+
+    // Build roll button
+    let rollButtonHtml = '';
+    if (needsToRoll) {
+      rollButtonHtml = `
+        <div style="padding:8px;margin-bottom:6px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:6px;text-align:center;">
+          <div style="color:#c4b5fd;font-size:0.75rem;margin-bottom:6px;font-family:'Cinzel',serif;">Sua vez de rolar iniciativa!</div>
+          <button id="playerInitRollBtn" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:1.1rem;font-weight:bold;letter-spacing:1px;box-shadow:0 2px 8px rgba(124,58,237,0.4);">
+            🎲 1d20
+          </button>
+        </div>
+      `;
+    } else if (hasRolled) {
+      const rollVal = myPhaseEntry.roll;
+      const modVal = myPhaseEntry.mod !== undefined && myPhaseEntry.mod !== null ? myPhaseEntry.mod : (myPhaseEntry.dexMod ?? 0);
+      const totalVal = myPhaseEntry.total;
+      const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
+      rollButtonHtml = `
+        <div style="padding:6px 8px;margin-bottom:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:6px;text-align:center;">
+          <span style="color:#22c55e;font-size:0.8rem;font-family:monospace;">✅ Iniciativa: ${rollVal} ${modStr} = ${totalVal}</span>
+        </div>
+      `;
+    }
+
+    container.innerHTML = `
+      <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:6px;padding:8px;margin-bottom:8px;">
+        <h4 style="color:#e8c97a;margin:0 0 6px;font-family:'Cinzel',serif;font-size:0.75rem;letter-spacing:1px;">&#x2694; Iniciativa — Rodada ${this.battleState?.round || 1}
+          <button id="sortInitiativeBtn" title="Ordenar por iniciativa (maior para menor)" style="background:none;border:none;color:#8a6a1a;cursor:pointer;font-size:0.75rem;margin-left:6px;vertical-align:middle;">&#x21C5;</button>
+        </h4>
+        ${rollButtonHtml}
+        <div class="initiative-list-players">
+          ${rolledList.length === 0 ? '<p style="color:#666;font-size:0.7rem;padding:8px;">Nenhum resultado ainda...</p>' : rolledList.map((p, idx) => {
+            const pos = idx + 1;
+            const isFirst = pos === 1;
+            const isCurrent = this.battleState?.turn === (p.id || p);
+            const roll = p.roll;
+            const modVal = p.dexMod !== undefined && p.dexMod !== null ? p.dexMod : 0;
+            const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
+            const total = p.total;
+            const typeLabel = p.type === 'npc' || p.type === 'enemy' ? '🔴' : '';
+            return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;margin:2px 0;
+              border-radius:4px;background:#0a0705;
+              border-left:3px solid ${isCurrent ? '#c9a84c' : isFirst ? '#555' : '#333'};
+              ${isCurrent ? 'background:rgba(201,168,76,0.15);' : ''}">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+                border-radius:50%;font-size:0.65rem;font-weight:bold;
+                ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">${pos}</span>
+              <span style="flex:1;color:#e8d8b0;font-size:0.75rem;font-family:'Cinzel',serif;">
+                ${typeLabel} ${p.name} ${p.id === myId ? '(você)' : ''}
+                ${isCurrent && isMyTurn ? '<span style="color:#22c55e;font-weight:bold;"> — SUA VEZ!</span>' : ''}
+              </span>
+              <span style="color:#c9a84c;font-size:0.8rem;font-family:monospace;font-weight:bold;">${roll} ${modStr} = ${total}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    // Sort button
+    document.getElementById('sortInitiativeBtn')?.addEventListener('click', () => {
+      rolledList.sort((a, b) => b.total - a.total);
+      container.querySelector('.initiative-list-players').innerHTML = rolledList.map((p, idx) => {
+        const pos = idx + 1;
+        const isFirst = pos === 1;
+        const isCurrent = this.battleState?.turn === (p.id || p);
+        const modVal = p.dexMod ?? 0;
+        const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
+        const typeLabel = p.type === 'npc' || p.type === 'enemy' ? '🔴' : '';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;margin:2px 0;
+          border-radius:4px;background:#0a0705;
+          border-left:3px solid ${isCurrent ? '#c9a84c' : isFirst ? '#555' : '#333'};
+          ${isCurrent ? 'background:rgba(201,168,76,0.15);' : ''}">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+            border-radius:50%;font-size:0.65rem;font-weight:bold;
+            ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">${pos}</span>
+          <span style="flex:1;color:#e8d8b0;font-size:0.75rem;font-family:'Cinzel',serif;">
+            ${typeLabel} ${p.name} ${p.id === myId ? '(você)' : ''}
+            ${isCurrent && isMyTurn ? '<span style="color:#22c55e;font-weight:bold;"> — SUA VEZ!</span>' : ''}
+          </span>
+          <span style="color:#c9a84c;font-size:0.8rem;font-family:monospace;font-weight:bold;">${p.roll} ${modStr} = ${p.total}</span>
+        </div>`;
+      }).join('');
+    });
+
+    // Roll button
+    const rollBtn = document.getElementById('playerInitRollBtn');
+    if (rollBtn && needsToRoll) {
+      rollBtn.addEventListener('click', async () => {
+        if (rollBtn.disabled) return;
+
+        rollBtn.disabled = true;
+        rollBtn.innerHTML = '⏳ Rolando...';
+
+        const rollVal = Math.floor(Math.random() * 20) + 1;
+
+        await this.submitInitiativeRoll({ results: [rollVal] });
+
+        // Re-render imediatamente apos submit (o listener do RTDB tambem vai atualizar)
+        setTimeout(() => this._renderPanelForPlayers(), 200);
+
+        SoundManager.playDiceRoll();
+        setTimeout(() => SoundManager.playDiceLand(), 300);
+      });
+    }
+  },
+
+  // ── PAINEL DE INICIATIVA DRAGGABLE (MESTRE) ─────────
+
+  subscribeToInitiativeOrder() {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+
+    const orderRef = ref(rtdb, `rooms/${code}/initiativeOrder`);
+    const listener = onValue(orderRef, (snap) => {
+      const order = snap.val();
+      if (order && Array.isArray(order)) {
+        this._cachedInitiativeOrder = order;
+        if (RoomSystem.isMaster) {
+          this.renderInitiativePanel(order);
+          this.updateInitiativeNpcDropdown();
+        } else {
+          this._renderPanelForPlayers();
+        }
+      } else {
+        this._cachedInitiativeOrder = null;
+        document.getElementById('initiativePanel')?.remove();
+        document.getElementById('initiativePanelPlayers')?.remove();
+      }
+    }, (err) => {
+      console.error('Battle: initiativeOrder subscription error:', err);
+    });
+
+    this.initiativeListeners.push({ ref: orderRef, listener });
+
+    // Players subscribe to initiativePhase for realtime roll updates
+    if (!RoomSystem.isMaster) {
+      const phaseRef = ref(rtdb, `rooms/${code}/initiativePhase`);
+      const phaseListener = onValue(phaseRef, (snap) => {
+        const phase = snap.val();
+        if (!phase || !phase.active || !phase.rolls) {
+          this._phaseActive = false;
+          this._phaseRolls = {};
+          window._initiativePhaseActive = false;
+          // Ainda render para mostrar NPCs que ja estao no order
+          this._renderPanelForPlayers();
+          return;
+        }
+
+        this._phaseActive = true;
+        this._phaseRolls = phase.rolls;
+        window._initiativePhaseActive = true;
+
+        const myUid = AuthSystem.currentUser?.uid;
+        if (phase.rolls[myUid]?.roll !== null && phase.rolls[myUid]?.roll !== undefined) {
+          window._playerInitiativeSubmitted = true;
+        }
+
+        this._renderPanelForPlayers();
+      }, (err) => {
+        console.error('Battle: initiativePhase subscription error:', err);
+      });
+
+      this.initiativeListeners.push({ ref: phaseRef, listener: phaseListener });
+    }
+  },
+
+  renderInitiativePanel(order) {
+    const container = document.getElementById('initiativePanel');
+    if (!container) {
+      this.createInitiativePanel();
+      this.renderInitiativePanel(order);
+      return;
+    }
+
+    const list = container.querySelector('.initiative-list');
+    if (!list) return;
+
+    if (!order.length) {
+      list.innerHTML = '<p class="text-muted" style="font-size:0.8rem;padding:8px;">Nenhum participante</p>';
+      return;
+    }
+
+    list.innerHTML = order.map((p, idx) => {
+      const pos = idx + 1;
+      const isFirst = pos === 1;
+      const roll = p.roll ?? '?';
+      const modStr = (p.dexMod ?? 0) >= 0 ? `+${p.dexMod}` : `${p.dexMod}`;
+      const total = p.total ?? '';
+      const typeLabel = p.type === 'npc' ? '🔴' : '';
+
+      return `
+        <div class="initiative-item" draggable="true" data-idx="${idx}"
+          style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin:3px 0;background:#0a0705;
+            border-radius:6px;border-left:3px solid ${isFirst ? '#c9a84c' : '#333'};
+            cursor:grab;user-select:none;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+            border-radius:50%;font-size:0.7rem;font-weight:bold;flex-shrink:0;
+            ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">
+            ${pos}
+          </span>
+          <span style="flex:1;color:#e8d8b0;font-size:0.8rem;font-family:'Cinzel',serif;">
+            ${typeLabel} ${p.name}
+          </span>
+          <span style="color:#a08050;font-size:0.7rem;font-family:monospace;">
+            ${roll} ${modStr} = ${total}
+          </span>
+          <button class="remove-init-btn" data-idx="${idx}"
+            style="background:none;border:none;color:#666;cursor:pointer;font-size:0.75rem;margin-left:4px;">✕</button>
+        </div>
+      `;
+    }).join('');
+
+    // Drag events
+    list.querySelectorAll('.initiative-item').forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', item.dataset.idx);
+        item.style.opacity = '0.4';
+      });
+      item.addEventListener('dragend', () => {
+        item.style.opacity = '1';
+      });
+    });
+
+    list.addEventListener('dragover', (e) => { e.preventDefault(); });
+
+    list.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+      const targetItem = e.target.closest('.initiative-item');
+      if (!targetItem) return;
+      const toIdx = parseInt(targetItem.dataset.idx);
+      if (isNaN(fromIdx) || isNaN(toIdx)) return;
+
+      const newOrder = [...order];
+      const [moved] = newOrder.splice(fromIdx, 1);
+      newOrder.splice(toIdx, 0, moved);
+
+      this.reorderInitiative(newOrder);
+    });
+
+    // Remove NPC button
+    list.querySelectorAll('.remove-init-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx);
+        const newOrder = [...order];
+        newOrder.splice(idx, 1);
+        await this.reorderInitiative(newOrder);
+      });
+    });
+  },
+
+  createInitiativePanel() {
+    if (!RoomSystem.isMaster) return;
+    const sidebar = document.querySelector('.sidebar-right');
+    if (!sidebar) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'initiativePanel';
+    panel.innerHTML = `
+      <div class="panel">
+        <h3 class="panel-title">⚔️ Iniciativa</h3>
+        <div class="initiative-list"></div>
+        <div id="npcInitDropdown" style="margin-top:8px;display:flex;gap:4px;align-items:center;">
+          <select id="npcInitSelect" style="flex:1;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:4px;border-radius:3px;font-size:0.7rem;">
+            <option value="">+ Adicionar NPC</option>
+          </select>
+          <button id="addNpcInitBtn" style="background:#c9a84c;border:none;color:#1a1208;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">OK</button>
+        </div>
+      </div>
+    `;
+
+    sidebar.insertBefore(panel, sidebar.querySelector('.panel'));
+
+    document.getElementById('addNpcInitBtn')?.addEventListener('click', () => {
+      const select = document.getElementById('npcInitSelect');
+      if (select?.value) {
+        this.addNpcToInitiative(select.value);
+        select.value = '';
+      }
+    });
+  },
+
+  updateInitiativeNpcDropdown() {
+    const select = document.getElementById('npcInitSelect');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">+ Adicionar NPC</option>';
+    if (window.MasterSystem?.npcCards) {
+      Object.values(window.MasterSystem.npcCards).forEach(npc => {
+        const opt = document.createElement('option');
+        opt.value = npc.id;
+        opt.textContent = npc.name;
+        select.appendChild(opt);
+      });
+    }
+  },
+
+  async reorderInitiative(order) {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), order);
+
+    const battleState = this.battleState;
+    if (battleState?.active) {
+      await update(ref(rtdb, `rooms/${code}/battleState/initiative`), order.map(p => ({
+        id: p.id,
+        name: p.name,
+        initiative: p.total ?? 0,
+        type: p.type || 'player',
+        roll: p.roll ?? null,
+        dexMod: p.mod ?? p.dexMod ?? 0,
+        npcCardId: p.npcCardId || null,
+        avatarUrl: p.avatarUrl || ''
+      })));
+
+      if (battleState.turn) {
+        const newIdx = order.findIndex(p => p.id === battleState.turn);
+        if (newIdx >= 0) this.turnIndex = newIdx;
+      }
+    }
+  },
+
+  async addNpcToInitiative(npcId) {
+    const code = RoomSystem.currentRoomCode;
+    if (!code) return;
+
+    let npc = null;
+    if (window.MasterSystem?.npcCards?.[npcId]) {
+      npc = window.MasterSystem.npcCards[npcId];
+    }
+
+    if (!npc) {
+      const token = Object.values(MapSystem.tokens || {}).find(t => t.npcCardId === npcId);
+      if (token) npc = token;
+    }
+
+    if (!npc) return;
+
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const initMod = npc.initMod || 0;
+    const entry = {
+      id: npc.id || `npc_init_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name: npc.name,
+      type: 'npc',
+      dexMod: initMod,
+      roll: roll,
+      total: roll + initMod,
+      npcCardId: npcId,
+      avatarUrl: npc.avatarUrl || ''
+    };
+
+    const orderSnap = await new Promise((resolve) => {
+      onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => resolve(s.val() || []), { onlyOnce: true });
+    });
+
+    orderSnap.push(entry);
+    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), orderSnap);
+
+    if (this.battleState?.active) {
+      await set(ref(rtdb, `rooms/${code}/battleState/initiative`), orderSnap);
+    }
+  },
+
+  // Mestre finaliza a fase de iniciativa
   async finalizeInitiative() {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
     try {
-      const [phaseData, orderData, initMods] = await Promise.all([
+      const [phaseData, orderData] = await Promise.all([
         new Promise((resolve) => {
           onValue(ref(rtdb, `rooms/${code}/initiativePhase`), (s) => resolve(s.val()), { onlyOnce: true });
         }),
         new Promise((resolve) => {
           onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => resolve(s.val() || []), { onlyOnce: true });
-        }),
-        new Promise((resolve) => {
-          onValue(ref(rtdb, `rooms/${code}/playerInitMods`), (s) => resolve(s.val() || {}), { onlyOnce: true });
         })
       ]);
 
@@ -424,33 +768,37 @@ export const BattleSystem = {
         return;
       }
 
-      // Rebuild final order from scratch using orderData + phase rolls
-      const orderItems = orderData || [];
-      const finalOrder = orderItems.map(item => {
-        if (item.type === 'player' && phaseData?.rolls?.[item.id]?.roll !== null) {
-          const phaseRoll = phaseData.rolls[item.id];
-          const resolvedMod = phaseRoll.mod !== undefined && phaseRoll.mod !== null ? phaseRoll.mod : (phaseRoll.total - phaseRoll.roll);
-          return {
-            ...item,
-            roll: phaseRoll.roll !== undefined && phaseRoll.roll !== null ? phaseRoll.roll : 0,
-            total: phaseRoll.total !== undefined && phaseRoll.total !== null ? phaseRoll.total : 0,
-            mod: resolvedMod,
-            dexMod: resolvedMod,
-            npcCardId: item.npcCardId || null,
-            avatarUrl: item.avatarUrl || ''
-          };
-        }
-        return {
-          ...item,
-          roll: item.roll ?? null,
-          total: item.total ?? null,
-          dexMod: item.dexMod ?? 0,
-          npcCardId: item.npcCardId || null,
-          avatarUrl: item.avatarUrl || ''
-        };
-      });
+      // Rebuild final order: NPCs do orderData + players que rolaram do phase
+      const finalOrder = [];
 
-      // Ordena por total (decrescente), null por último
+      // NPCs do orderData
+      for (const item of (orderData || [])) {
+        if (item.type === 'npc' || item.type === 'enemy') {
+          finalOrder.push({ ...item });
+        }
+      }
+
+      // Players que rolaram do phase
+      for (const [, phaseRoll] of Object.entries(phaseData?.rolls || {})) {
+        if (phaseRoll.roll !== null && phaseRoll.roll !== undefined) {
+          const mod = phaseRoll.mod ?? phaseRoll.dexMod ?? 0;
+          // Find cached data for avatar
+          const cached = orderData?.find(c => c.id === phaseRoll.id) || {};
+          finalOrder.push({
+            id: phaseRoll.id,
+            name: phaseRoll.name,
+            type: 'player',
+            dexMod: mod,
+            roll: phaseRoll.roll,
+            total: phaseRoll.total,
+            mod: mod,
+            npcCardId: null,
+            avatarUrl: phaseRoll.avatarUrl || cached.avatarUrl || ''
+          });
+        }
+      }
+
+      // Ordena por total decrescente
       finalOrder.sort((a, b) => {
         if (a.total === null && b.total === null) return 0;
         if (a.total === null) return 1;
@@ -467,7 +815,7 @@ export const BattleSystem = {
       await set(ref(rtdb, `rooms/${code}/initiativePhase`), null);
       await set(ref(rtdb, `rooms/${code}/initiativeOrder`), finalOrder);
 
-      // Delay de 3s para evitar conflitos de comunicação
+      // Delay para evitar conflitos
       await new Promise(r => setTimeout(r, 3000));
 
       // Inicia a batalha
@@ -517,384 +865,6 @@ export const BattleSystem = {
     document.getElementById('initiativeModal')?.remove();
   },
 
-  // ── PAINEL DE INICIATIVA DRAGGABLE (MESTRE) ─────────
-
-  // Subescreve a ordem de iniciativa via drag & drop
-  async reorderInitiative(order) {
-    const code = RoomSystem.currentRoomCode;
-    if (!code) return;
-    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), order);
-
-    // Atualiza battleState se a batalha já estiver ativa
-    const battleState = this.battleState;
-    if (battleState?.active) {
-      await update(ref(rtdb, `rooms/${code}/battleState/initiative`), order.map(p => ({
-        id: p.id,
-        name: p.name,
-        initiative: p.total ?? 0,
-        type: p.type || 'player',
-        roll: p.roll ?? null,
-        dexMod: p.mod ?? p.dexMod ?? 0,
-        npcCardId: p.npcCardId || null,
-        avatarUrl: p.avatarUrl || ''
-      })));
-
-      // Se o turno atual mudou de posição, ajusta turnIndex
-      if (battleState.turn) {
-        const newIdx = order.findIndex(p => p.id === battleState.turn);
-        if (newIdx >= 0) this.turnIndex = newIdx;
-      }
-    }
-  },
-
-  // Adiciona NPC à iniciativa com roll automático
-  async addNpcToInitiative(npcId) {
-    const code = RoomSystem.currentRoomCode;
-    if (!code) return;
-
-    // Tenta pegar do MasterSystem, senão do mapa
-    let npc = null;
-    if (window.MasterSystem?.npcCards?.[npcId]) {
-      npc = window.MasterSystem.npcCards[npcId];
-    }
-
-    if (!npc) {
-      const token = Object.values(MapSystem.tokens || {}).find(t => t.npcCardId === npcId);
-      if (token) npc = token;
-    }
-
-    if (!npc) return;
-
-    const roll = Math.floor(Math.random() * 20) + 1;
-    const initMod = npc.initMod || 0;
-    const entry = {
-      id: npc.id || `npc_init_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-      name: npc.name,
-      type: 'npc',
-      dexMod: initMod,
-      roll: roll,
-      total: roll + initMod,
-      npcCardId: npcId,
-      avatarUrl: npc.avatarUrl || ''
-    };
-
-    // Adiciona ao initiativeOrder no RTDB
-    const orderSnap = await new Promise((resolve) => {
-      onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => resolve(s.val() || []), { onlyOnce: true });
-    });
-
-    orderSnap.push(entry);
-    await set(ref(rtdb, `rooms/${code}/initiativeOrder`), orderSnap);
-
-    // Se batalha ativa, atualiza battleState.initiative também
-    if (this.battleState?.active) {
-      await set(ref(rtdb, `rooms/${code}/battleState/initiative`), orderSnap);
-    }
-  },
-
-  subscribeToInitiativeOrder() {
-    const code = RoomSystem.currentRoomCode;
-    if (!code) return;
-
-    const orderRef = ref(rtdb, `rooms/${code}/initiativeOrder`);
-    const listener = onValue(orderRef, (snap) => {
-      const order = snap.val();
-      if (order && Array.isArray(order)) {
-        this._cachedInitiativeOrder = order;
-        if (RoomSystem.isMaster) {
-          this.renderInitiativePanel(order);
-        } else {
-          const rolledList = order.filter(p => p.total !== null && p.total !== undefined && p.roll !== null && p.roll !== undefined);
-          rolledList.sort((a, b) => b.total - a.total);
-          this.renderInitiativePanelForPlayers(rolledList);
-        }
-      } else {
-        // Remove painéis se iniciativa não existe
-        this._cachedInitiativeOrder = null;
-        document.getElementById('initiativePanel')?.remove();
-        document.getElementById('initiativePanelPlayers')?.remove();
-      }
-    });
-
-    this.initiativeListeners.push({ ref: orderRef, listener });
-
-    // Players also subscribe to initiativePhase for real-time sorted ordering
-    if (!RoomSystem.isMaster) {
-      const phaseRef = ref(rtdb, `rooms/${code}/initiativePhase`);
-      const phaseListener = onValue(phaseRef, (snap) => {
-        const phase = snap.val();
-        if (!phase || !phase.active || !phase.rolls) {
-          window._initiativePhaseActive = false;
-          return;
-        }
-
-        // Track initiative phase state for d20 auto-capture
-        window._initiativePhaseActive = true;
-
-        // If current player already rolled, set flag
-        const myUid = AuthSystem.currentUser?.uid;
-        if (phase.rolls[myUid]?.roll !== null && phase.rolls[myUid]?.roll !== undefined) {
-          window._playerInitiativeSubmitted = true;
-        }
-
-        // Build merged order: player rolls + existing npc rolls
-        const allRolls = { ...phase.rolls };
-        const order = this._buildRealtimeOrder(allRolls);
-        this._cachedInitiativeOrder = order;
-        this.renderInitiativePanelForPlayers(order);
-      }, (err) => {
-        console.error('Battle: initiativePhase subscription error:', err);
-      });
-
-      this.initiativeListeners.push({ ref: phaseRef, listener: phaseListener });
-    }
-  },
-
-  renderInitiativePanel(order) {
-    const container = document.getElementById('initiativePanel');
-    if (!container) {
-      // Cria painel se não existe
-      this.createInitiativePanel();
-      this.renderInitiativePanel(order);
-      return;
-    }
-
-    const list = container.querySelector('.initiative-list');
-    if (!list) return;
-
-    if (!order.length) {
-      list.innerHTML = '<p class="text-muted" style="font-size:0.8rem;padding:8px;">Nenhum participante</p>';
-      return;
-    }
-
-    list.innerHTML = order.map((p, idx) => {
-      const pos = idx + 1;
-      const isFirst = pos === 1;
-      const roll = p.roll ?? '?';
-      const modStr = p.dexMod >= 0 ? `+${p.dexMod}` : `${p.dexMod}`;
-      const total = p.total ?? '';
-      const typeLabel = p.type === 'npc' ? '🔴' : '';
-
-      return `
-        <div class="initiative-item" draggable="true" data-idx="${idx}"
-          style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin:3px 0;background:#0a0705;
-            border-radius:6px;border-left:3px solid ${isFirst ? '#c9a84c' : '#333'};
-            cursor:grab;user-select:none;">
-          <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
-            border-radius:50%;font-size:0.7rem;font-weight:bold;flex-shrink:0;
-            ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">
-            ${pos}
-          </span>
-          <span style="flex:1;color:#e8d8b0;font-size:0.8rem;font-family:'Cinzel',serif;">
-            ${typeLabel} ${p.name}
-          </span>
-          <span style="color:#a08050;font-size:0.7rem;font-family:monospace;">
-            ${roll} ${modStr} = ${total}
-          </span>
-          <button class="remove-init-btn" data-idx="${idx}"
-            style="background:none;border:none;color:#666;cursor:pointer;font-size:0.75rem;margin-left:4px;">✕</button>
-        </div>
-      `;
-    }).join('');
-
-    // Setup drag events
-    list.querySelectorAll('.initiative-item').forEach(item => {
-      item.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', item.dataset.idx);
-        item.style.opacity = '0.4';
-      });
-      item.addEventListener('dragend', () => {
-        item.style.opacity = '1';
-      });
-    });
-
-    list.addEventListener('dragover', (e) => { e.preventDefault(); });
-
-    list.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
-      const targetItem = e.target.closest('.initiative-item');
-      if (!targetItem) return;
-      const toIdx = parseInt(targetItem.dataset.idx);
-      if (isNaN(fromIdx) || isNaN(toIdx)) return;
-
-      const newOrder = [...order];
-      const [moved] = newOrder.splice(fromIdx, 1);
-      newOrder.splice(toIdx, 0, moved);
-
-      this.reorderInitiative(newOrder);
-    });
-
-    // Remove NPC button
-    list.querySelectorAll('.remove-init-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const idx = parseInt(btn.dataset.idx);
-        const newOrder = [...order];
-        newOrder.splice(idx, 1);
-        await this.reorderInitiative(newOrder);
-      });
-    });
-  },
-
-  renderInitiativePanelForPlayers(order) {
-    let container = document.getElementById('initiativePanelPlayers');
-    if (!container) {
-      const mapViewer = document.getElementById('mapViewer');
-      if (!mapViewer) return;
-      container = document.createElement('div');
-      container.id = 'initiativePanelPlayers';
-      mapViewer.parentNode.insertBefore(container, mapViewer);
-    }
-
-    const myId = AuthSystem.currentUser?.uid;
-    const isMyTurn = this.battleState?.active && this.battleState?.turn === myId;
-
-    // Determine if current player needs to roll (check phaseRolls, not the order which only has rolled players)
-    const phaseRolls = this._initPhaseRolls || {};
-    const phaseActive = this._phaseActive || false;
-    const myPhaseEntry = phaseRolls[myId];
-    const needsToRoll = phaseActive && myPhaseEntry && (myPhaseEntry.roll === null || myPhaseEntry.roll === undefined);
-    const hasRolled = myPhaseEntry && myPhaseEntry.roll !== null && myPhaseEntry.roll !== undefined;
-
-    let rollButtonHtml = '';
-    if (needsToRoll) {
-      rollButtonHtml = `
-        <div style="padding:8px;margin-bottom:6px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:6px;text-align:center;">
-          <div style="color:#c4b5fd;font-size:0.75rem;margin-bottom:6px;font-family:'Cinzel',serif;">Sua vez de rolar iniciativa!</div>
-          <button id="playerInitRollBtn" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:1.1rem;font-weight:bold;letter-spacing:1px;box-shadow:0 2px 8px rgba(124,58,237,0.4);">
-            🎲 1d20
-          </button>
-        </div>
-      `;
-    } else if (hasRolled) {
-      const rollDisplay = myPhaseEntry.roll || '?';
-      const modVal = myPhaseEntry.mod !== undefined && myPhaseEntry.mod !== null ? myPhaseEntry.mod : 0;
-      const totalDisplay = myPhaseEntry.total || '';
-      const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
-      rollButtonHtml = `
-        <div style="padding:6px 8px;margin-bottom:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:6px;text-align:center;">
-          <span style="color:#22c55e;font-size:0.8rem;font-family:monospace;">✅ Iniciativa: ${rollDisplay} ${modStr} = ${totalDisplay}</span>
-        </div>
-      `;
-    }
-
-    // Sort the order list (all entries already have totals since only rolled players + NPCs are included)
-    this._sortInitiativeList(order);
-
-    container.innerHTML = `
-      <div style="background:#1a1208;border:1px solid #8a6a1a;border-radius:6px;padding:8px;margin-bottom:8px;">
-        <h4 style="color:#e8c97a;margin:0 0 6px;font-family:'Cinzel',serif;font-size:0.75rem;letter-spacing:1px;">&#x2694; Iniciativa — Rodada ${this.battleState?.round || 1}
-          <button id="sortInitiativeBtn" title="Ordenar por iniciativa (maior para menor)" style="background:none;border:none;color:#8a6a1a;cursor:pointer;font-size:0.75rem;margin-left:6px;vertical-align:middle;">⇅</button>
-        </h4>
-        ${rollButtonHtml}
-        <div class="initiative-list-players">
-          ${order.map((p, idx) => {
-            const pos = idx + 1;
-            const isFirst = pos === 1;
-            const isCurrent = this.battleState?.turn === (p.id || p);
-            const roll = p.roll !== undefined && p.roll !== null ? p.roll : '?';
-            const modVal = p.dexMod !== undefined && p.dexMod !== null ? p.dexMod : 0;
-            const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
-            const total = p.total !== undefined && p.total !== null ? p.total : '';
-            const typeLabel = p.type === 'npc' || p.type === 'enemy' ? '🔴' : '';
-            return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;margin:2px 0;
-              border-radius:4px;background:#0a0705;
-              border-left:3px solid ${isCurrent ? '#c9a84c' : isFirst ? '#555' : '#333'};
-              ${isCurrent ? 'background:rgba(201,168,76,0.15);' : ''}">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
-                border-radius:50%;font-size:0.65rem;font-weight:bold;
-                ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">${pos}</span>
-              <span style="flex:1;color:#e8d8b0;font-size:0.75rem;font-family:'Cinzel',serif;">
-                ${typeLabel} ${p.name} ${p.id === myId ? '(você)' : ''}
-                ${isCurrent && isMyTurn ? '<span style="color:#22c55e;font-weight:bold;"> — SUA VEZ!</span>' : ''}
-              </span>
-              <span style="color:#a08050;font-size:0.65rem;font-family:monospace;">${roll} ${modStr} = ${total}</span>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>
-    `;
-
-    // Wire up sort button
-    document.getElementById('sortInitiativeBtn')?.addEventListener('click', () => {
-      this._sortInitiativeList(order);
-      this.renderInitiativePanelForPlayers(order);
-    });
-
-    // Wire up roll button
-    const rollBtn = document.getElementById('playerInitRollBtn');
-    if (rollBtn && needsToRoll) {
-      rollBtn.addEventListener('click', async () => {
-        if (rollBtn.disabled) return;
-
-        rollBtn.disabled = true;
-        rollBtn.innerHTML = '⏳ Rolando...';
-
-        const rollVal = Math.floor(Math.random() * 20) + 1;
-
-        await this.submitInitiativeRoll({ results: [rollVal] });
-
-        // Refresh panel after short delay to pick up new RTDB values
-        setTimeout(() => {
-          this._renderPanelWithPhase();
-        }, 300);
-
-        SoundManager.playDiceRoll();
-        setTimeout(() => SoundManager.playDiceLand(), 300);
-      });
-    }
-  },
-
-  createInitiativePanel() {
-    if (!RoomSystem.isMaster) return;
-    const sidebar = document.querySelector('.sidebar-right');
-    if (!sidebar) return;
-
-    const panel = document.createElement('div');
-    panel.id = 'initiativePanel';
-    panel.innerHTML = `
-      <div class="panel">
-        <h3 class="panel-title">⚔️ Iniciativa</h3>
-        <div class="initiative-list"></div>
-        <div id="npcInitDropdown" style="margin-top:8px;display:flex;gap:4px;align-items:center;">
-          <select id="npcInitSelect" style="flex:1;background:#0a0705;border:1px solid #8a6a1a;color:#e8d8b0;padding:4px;border-radius:3px;font-size:0.7rem;">
-            <option value="">+ Adicionar NPC</option>
-          </select>
-          <button id="addNpcInitBtn" style="background:#c9a84c;border:none;color:white;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">OK</button>
-        </div>
-      </div>
-    `;
-
-    // Insert before the first panel in sidebar
-    sidebar.insertBefore(panel, sidebar.querySelector('.panel'));
-
-    // Wire up the add NPC button
-    document.getElementById('addNpcInitBtn')?.addEventListener('click', () => {
-      const select = document.getElementById('npcInitSelect');
-      if (select?.value) {
-        this.addNpcToInitiative(select.value);
-        select.value = '';
-      }
-    });
-  },
-
-  // Atualiza dropdown de NPCs no painel de iniciativa
-  updateInitiativeNpcDropdown() {
-    const select = document.getElementById('npcInitSelect');
-    if (!select) return;
-
-    select.innerHTML = '<option value="">+ Adicionar NPC</option>';
-    if (window.MasterSystem?.npcCards) {
-      Object.values(window.MasterSystem.npcCards).forEach(npc => {
-        const opt = document.createElement('option');
-        opt.value = npc.id;
-        opt.textContent = npc.name;
-        select.appendChild(opt);
-      });
-    }
-  },
-
   // Exibe modal ao mestre com tracking da iniciativa
   showInitiativeTrackerModal() {
     const existing = document.getElementById('initiativeModal');
@@ -921,7 +891,6 @@ export const BattleSystem = {
 
     document.body.appendChild(modal);
 
-    // Listener em tempo real dos resultados
     onValue(initRef, (snap) => {
       const phase = snap.val();
       if (!phase || !phase.rolls) return;
@@ -940,10 +909,11 @@ export const BattleSystem = {
           <span style="flex:1;color:#e8d8b0;">${p.name}</span>
           <span style="color:#8a6a1a;font-size:0.75rem;">${modLabel}</span>
           <span style="color:#e8c97a;font-family:monospace;min-width:50px;text-align:right;">
-            ${p.roll !== null ? `🎲 ${p.roll} ${modLabel.includes('+') ? '+' : ''}→ <strong style="color:#22c55e;font-size:1.1rem;">${p.total}</strong>` : '<em style="color:#666;">Aguardando...</em>'}
+            ${p.roll !== null ? `🎲 ${p.roll} → <strong style="color:#22c55e;font-size:1.1rem;">${p.total}</strong>` : '<em style="color:#666;">Aguardando...</em>'}
           </span>
         </div>
-      `}).join('');
+      `;
+      }).join('');
     }, { onlyOnce: false });
 
     const finalizeBtn = document.getElementById('finalizeInitBtn');
@@ -953,110 +923,31 @@ export const BattleSystem = {
       });
     }
 
-    // Fecha ao clicar fora
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
-        modal.style.display = 'none'; // só esconde, não remove
-        // Mostra botão para reabrir
+        modal.style.display = 'none';
         const reopenBtn = document.getElementById('reopenInitiativeBtn');
         if (reopenBtn) reopenBtn.style.display = 'inline-block';
       }
     });
   },
 
-  // Exibe modal ao jogador para rolar iniciativa
-  subscribeToInitiativePhaseForPlayers(code) {
-    const initRef = ref(rtdb, `rooms/${code}/initiativePhase`);
-    const initiativeOrderRef = ref(rtdb, `rooms/${code}/initiativeOrder`);
-
-    // Listen to BOTH order and phase changes so the panel updates in realtime
-    onValue(initiativeOrderRef, (orderSnap) => {
-      const order = orderSnap.val() || [];
-      this._cachedInitiativeOrder = order;
-      this._renderPanelWithPhase();
-    });
-
-    onValue(initRef, (phaseSnap) => {
-      const phase = phaseSnap.val();
-      this._phaseActive = phase?.active || false;
-      this._initPhaseRolls = phase?.rolls || {};
-      this._renderPanelWithPhase();
-    });
-  },
-
-  _renderPanelWithPhase() {
-    if (RoomSystem.isMaster) return;
-    const phaseRolls = this._initPhaseRolls || {};
-    const phaseActive = this._phaseActive || false;
-
-    // If phase was never set yet, wait
-    if (!phaseActive && this._phaseActive === undefined) return;
-
-    // Build the complete order from cached initiativeOrder (NPCs) + phase (players)
-    const cached = this._cachedInitiativeOrder || [];
-
-    // Only NPCs that have a rolled value — NPCs auto-roll so they always have values
-    const npcEntries = cached.filter(p => p.type === 'npc' || p.type === 'enemy').map(p => ({
-      id: p.id,
-      name: p.name,
-      type: p.type,
-      dexMod: p.dexMod !== undefined && p.dexMod !== null ? p.dexMod : 0,
-      roll: p.roll !== undefined && p.roll !== null ? p.roll : null,
-      total: p.total !== undefined && p.total !== null ? p.total : null,
-      npcCardId: p.npcCardId || null,
-      avatarUrl: p.avatarUrl || ''
-    }));
-
-    // Only players who HAVE rolled (roll !== null)
-    const playerEntries = Object.values(phaseRolls).map(p => ({
-      id: p.id,
-      name: p.name,
-      type: 'player',
-      dexMod: p.mod !== undefined && p.mod !== null ? p.mod : (p.dexMod !== undefined && p.dexMod !== null ? p.dexMod : 0),
-      roll: p.roll !== undefined && p.roll !== null ? p.roll : null,
-      total: p.total !== undefined && p.total !== null ? p.total : null,
-      avatarUrl: p.avatarUrl || ''
-    })).filter(p => p.roll !== null);
-
-    const all = [...playerEntries, ...npcEntries];
-    this._sortInitiativeList(all);
-
-    this.renderInitiativePanelForPlayers(all);
-  },
-
-  _sortInitiativeList(list) {
-    list.sort((a, b) => {
-      const aHasTotal = a.total !== undefined && a.total !== null;
-      const bHasTotal = b.total !== undefined && b.total !== null;
-      // Both have totals: sort desc
-      if (aHasTotal && bHasTotal) return b.total - a.total;
-      // Only one has total: the one with total goes first
-      if (aHasTotal) return -1;
-      if (bHasTotal) return 1;
-      return 0;
-    });
-  },
-
-  async startBattle() {
+  startBattle() {
     const code = RoomSystem.currentRoomCode;
     if (!code || !RoomSystem.isMaster) return;
 
-    // Inicia a fase de iniciativa (players + auto-roll NPCs)
-    await this.startInitiativePhase();
+    this.startInitiativePhase();
 
-    // Exibe painel de iniciativa draggable
-    const orderSnap = await new Promise((resolve) => {
-      onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => resolve(s.val() || []), { onlyOnce: true });
-    });
-    this.renderInitiativePanel(orderSnap);
+    onValue(ref(rtdb, `rooms/${code}/initiativeOrder`), (s) => {
+      this.renderInitiativePanel(s.val() || []);
+    }, { onlyOnce: true });
+
     this.updateInitiativeNpcDropdown();
 
-    // Atualiza dropdown periodicamente quando NPCs mudam
     const updateInterval = setInterval(() => {
       this.updateInitiativeNpcDropdown();
     }, 3000);
 
-    // Guarda intervalo para cleanup
     this._npcUpdateInterval = updateInterval;
   },
 
@@ -1101,10 +992,8 @@ export const BattleSystem = {
     const code = RoomSystem.currentRoomCode;
     if (!code) return;
 
-    // Delay de 3s para evitar conflitos de comunicação
     await new Promise(r => setTimeout(r, 3000));
 
-    // Limpa TUDO — reset completo para nova batalha
     await set(ref(rtdb, `rooms/${code}/battleState`), {
       active: false,
       round: 0,
@@ -1121,30 +1010,28 @@ export const BattleSystem = {
     this.battleState = null;
     this.initiative = [];
     this.turnIndex = 0;
+    this._cachedInitiativeOrder = null;
+    this._phaseActive = false;
+    this._phaseRolls = {};
     window._initiativePhaseActive = false;
     window._playerInitiativeSubmitted = false;
     document.getElementById('initiativeModal')?.remove();
+    document.getElementById('initiativePanelPlayers')?.remove();
   },
 
   async nextTurn() {
     const code = RoomSystem.currentRoomCode;
     if (!code || !this.battleState?.active) return;
 
-    // Delay de 3s para evitar conflitos de comunicação
     await new Promise(r => setTimeout(r, 3000));
 
     this.turnIndex++;
 
-    // Ciclo: ao chegar no último, volta ao primeiro e incrementa rodada
     if (this.turnIndex >= this.battleState.initiative.length) {
       this.turnIndex = 0;
     }
 
     const newRound = this.battleState.round || 1;
-    // Se voltou ao primeiro, nova rodada
-    const prevTurnIndex = this.turnIndex === 0
-      ? this.battleState.initiative.length - 1
-      : this.turnIndex - 1;
 
     await update(ref(rtdb, `rooms/${code}/battleState`), {
       turn: this.battleState.initiative[this.turnIndex]?.id,
@@ -1152,12 +1039,10 @@ export const BattleSystem = {
     });
   },
 
-  // Fim de turno — chamado pelo jogador (se for sua vez) ou pelo mestre
   async endTurn() {
     const code = RoomSystem.currentRoomCode;
     if (!code || !this.battleState?.active) return;
 
-    // Verifica permissão: dono do turno ou mestre
     const currentTurnParticipant = this.battleState.initiative[this.turnIndex];
     const isMyTurn = currentTurnParticipant?.id === AuthSystem.currentUser?.uid;
     const isMaster = RoomSystem.isMaster;
@@ -1329,7 +1214,6 @@ export const BattleSystem = {
           const isCurrentTurn = state.turn === (p.id || p);
           const posNumber = idx + 1;
           const isFirst = posNumber === 1;
-          const isYourTurn = isCurrentTurn && (p.id === AuthSystem.currentUser?.uid);
 
           html += `
             <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin:2px 0;border-radius:4px;
@@ -1339,8 +1223,7 @@ export const BattleSystem = {
                 ${isFirst ? 'background:#c9a84c;color:#1a1208;' : 'background:#333;color:#888;'}">
                 ${posNumber}
               </span>
-              <span style="${isYourTurn ? 'color:#22c55e;font-weight:bold;' : 'color:#e8d8b0;'}">${p.name}</span>
-              <span style="color:#a08050;font-size:0.75rem;">(DEX +${p.dexMod || 0})</span>
+              <span style="${isCurrentTurn ? 'color:#22c55e;font-weight:bold;' : 'color:#e8d8b0;'}">${p.name}</span>
               <span style="font-family:monospace;color:${isFirst ? '#c9a84c' : '#e8c97a'};">${p.initiative}</span>
             </div>
           `;
@@ -1367,6 +1250,9 @@ export const BattleSystem = {
     this.battleState = null;
     this.playerAbilities = {};
     this.initiative = [];
+    this._cachedInitiativeOrder = null;
+    this._phaseActive = false;
+    this._phaseRolls = {};
     document.getElementById('initiativePanelPlayers')?.remove();
   }
 };
