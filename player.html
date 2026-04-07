@@ -620,29 +620,30 @@
     const PlayerDrawSync = {
       canvas: null,
       ctx: null,
-      subscription: null,
       init() {
         this.canvas = document.getElementById('playerDrawCanvas');
         if (!this.canvas) return;
         const wrapper = document.getElementById('mapWrapper');
         if (!wrapper) return;
-        this.canvas.width = wrapper.offsetWidth;
-        this.canvas.height = wrapper.offsetHeight;
-        this.ctx = this.canvas.getContext('2d');
-        // Subscribe to changes in RTDB drawing (from master's DrawSystem)
-        onRtdbValue(dbRef(rtdb, `rooms/${roomCode}/map/drawing`), (snap) => {
-          const dataURL = snap.val();
-          if (dataURL && this.ctx) {
-            const img = new Image();
-            img.onload = () => {
-              this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-              this.ctx.drawImage(img, 0, 0);
-            };
-            img.src = dataURL;
-          } else if (this.ctx) {
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        setTimeout(() => {
+          this.canvas.width = wrapper.offsetWidth;
+          this.canvas.height = wrapper.offsetHeight;
+          if (this.canvas.width > 0 && this.canvas.height > 0) {
+            this.ctx = this.canvas.getContext('2d');
+            // Load initial drawing
+            onRtdbValue(dbRef(rtdb, `rooms/${roomCode}/map/drawing`), (snap) => {
+              const dataURL = snap.val();
+              if (dataURL && this.ctx) {
+                const img = new Image();
+                img.onload = () => {
+                  this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                  this.ctx.drawImage(img, 0, 0);
+                };
+                img.src = dataURL;
+              }
+            });
           }
-        });
+        }, 300);
       },
       resize() {
         if (!this.canvas) return;
@@ -681,6 +682,15 @@
         console.log("[Player] Inicializando Mapa...");
         await MapSystem.initialize('mapViewer');
         MapSystem.subscribeToMap();
+        // Re-add the drawing canvas after MapSystem.initialize overwrites innerHTML
+        const mapViewer = document.getElementById('mapViewer');
+        const wrapper = document.getElementById('mapWrapper');
+        if (wrapper && !document.getElementById('playerDrawCanvas')) {
+          const drawCanvas = document.createElement('canvas');
+          drawCanvas.id = 'playerDrawCanvas';
+          drawCanvas.style.cssText = 'position:absolute;inset:0;z-index:20;pointer-events:none;';
+          wrapper.appendChild(drawCanvas);
+        }
         PlayerDrawSync.init();
 
         console.log("[Player] Carregando Ficha e Batalha...");
@@ -1144,6 +1154,19 @@
         const dice = btn.dataset.dice;
         const result = await DiceSystem.rollWithAnimation(dice, null, { animate: false });
         document.getElementById('diceResult').textContent = DiceSystem.formatResult(result);
+
+        // Auto-captura 1d20 para iniciativa se estiver na fase de iniciativa
+        if (dice === '1d20' && !window._playerInitiativeRollCaptured) {
+          window._playerInitiativeRollCaptured = true;
+          if (BattleSystem?.battleState?.active) {
+            // Batalha ativa — verificar se o player já tem rolagem de iniciativa
+            const playerId = AuthSystem.currentUser?.uid;
+            if (playerId) {
+              BattleSystem.submitInitiativeRoll(result.results);
+            }
+          }
+        }
+
         await ChatSystem.sendRoll(dice, result.results, result.total, 'Teste');
         SoundManager.playDiceRoll();
         setTimeout(() => SoundManager.playDiceLand(), 300);
@@ -1160,6 +1183,18 @@
           document.getElementById('customDiceInput').value = '';
           DiceSystem.rollWithAnimation(input, display, { animate: true }).then(result => {
             display.textContent = DiceSystem.formatResult(result);
+
+            // Auto-captura 1d20 para iniciativa via input customizado
+            if (input.match(/^1d20/i) && !window._playerInitiativeRollCaptured) {
+              window._playerInitiativeRollCaptured = true;
+              if (BattleSystem?.battleState?.active) {
+                const playerId = AuthSystem.currentUser?.uid;
+                if (playerId) {
+                  BattleSystem.submitInitiativeRoll(result.results);
+                }
+              }
+            }
+
             ChatSystem.sendRoll(input, result.results, result.total, 'Teste');
             SoundManager.playDiceRoll();
             setTimeout(() => SoundManager.playDiceLand(), 300);

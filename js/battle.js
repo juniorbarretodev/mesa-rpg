@@ -144,16 +144,23 @@ export const BattleSystem = {
       });
     });
 
-    // NPCs auto-rolam 1d20
+    // NPCs auto-rolam 1d20 + initMod
     npcTokens.forEach(token => {
       const roll = Math.floor(Math.random() * 20) + 1;
+      // Tenta pegar initMod do NPC card via MasterSystem
+      let initMod = 0;
+      if (window.MasterSystem?.npcCards) {
+        const npcCard = Object.values(window.MasterSystem.npcCards)
+          .find(n => n.id === token.npcCardId || n.name === token.name);
+        if (npcCard) initMod = npcCard.initMod || 0;
+      }
       initiativeOrder.push({
         id: token.id,
         name: token.name,
         type: 'npc',
-        dexMod: 0,
+        dexMod: initMod,
         roll: roll,
-        total: roll,
+        total: roll + initMod,
         npcCardId: token.npcCardId || null,
         avatarUrl: token.avatarUrl || ''
       });

@@ -412,6 +412,7 @@ export const MasterSystem = {
       name,
       hp,
       hpMax,
+      initMod:  0,
       status:    '—',
       alignment: type,
       type:      TYPEKEY[type] || 'npc',
@@ -502,6 +503,21 @@ export const MasterSystem = {
                  border-radius:2px;cursor:pointer;font-size:0.75rem;flex-shrink:0;">+</button>
       </div>
 
+      <!-- Init Mod -->
+      <div style="display:flex;align-items:center;gap:3px;margin-top:4px;">
+        <label style="font-size:0.55rem;color:#c9a84c;">Init:</label>
+        <button data-action="initmod-minus"
+          style="background:#555;border:none;color:white;width:18px;height:18px;
+                 border-radius:2px;cursor:pointer;font-size:0.75rem;flex-shrink:0;">−</button>
+        <input data-action="initmod-input" type="number"
+          value="${npc.initMod || 0}"
+          style="width:36px;text-align:center;background:#0a0705;border:1px solid #8a6a1a;
+                 color:#c9a84c;border-radius:3px;padding:2px;font-size:0.65rem;">
+        <button data-action="initmod-plus"
+          style="background:#555;border:none;color:white;width:18px;height:18px;
+                 border-radius:2px;cursor:pointer;font-size:0.75rem;flex-shrink:0;">+</button>
+      </div>
+
       <!-- status -->
       <select data-action="status"
         style="width:100%;margin-top:8px;background:#0a0705;border:1px solid #8a6a1a;
@@ -524,12 +540,14 @@ export const MasterSystem = {
     card.addEventListener('click', (e) => {
       const action = e.target.closest('[data-action]')?.dataset.action;
       if (!action) return;
-      if (action === 'remove')       this._removeNpc(npc.id);
-      if (action === 'hp-minus')     this._adjustNpcHP(npc.id, -1);
-      if (action === 'hp-plus')      this._adjustNpcHP(npc.id, +1);
-      if (action === 'hpmax-minus')  this._adjustNpcHPMax(npc.id, -1);
-      if (action === 'hpmax-plus')   this._adjustNpcHPMax(npc.id, +1);
-      if (action === 'map')          this.dragNpcToMap(npc.id);
+      if (action === 'remove')        this._removeNpc(npc.id);
+      if (action === 'hp-minus')      this._adjustNpcHP(npc.id, -1);
+      if (action === 'hp-plus')       this._adjustNpcHP(npc.id, +1);
+      if (action === 'hpmax-minus')   this._adjustNpcHPMax(npc.id, -1);
+      if (action === 'hpmax-plus')    this._adjustNpcHPMax(npc.id, +1);
+      if (action === 'initmod-minus') this._adjustNpcInitMod(npc.id, -1);
+      if (action === 'initmod-plus')  this._adjustNpcInitMod(npc.id, +1);
+      if (action === 'map')           this.dragNpcToMap(npc.id);
     });
 
     card.querySelector('[data-action="hp-input"]').addEventListener('change', (e) => {
@@ -538,6 +556,10 @@ export const MasterSystem = {
 
     card.querySelector('[data-action="hpmax-input"]').addEventListener('change', (e) => {
       this._setNpcHPMax(npc.id, e.target.value);
+    });
+
+    card.querySelector('[data-action="initmod-input"]').addEventListener('change', (e) => {
+      this._setNpcInitMod(npc.id, e.target.value);
     });
 
     card.querySelector('[data-action="status"]').addEventListener('change', (e) => {
@@ -617,6 +639,25 @@ export const MasterSystem = {
     if (!npc) return;
     npc.status = status;
     this._renderNpcCard(npc);  // re-render para atualizar badge
+  },
+
+  _adjustNpcInitMod(npcId, delta) {
+    const npc = this.npcCards?.[npcId];
+    if (!npc) return;
+    npc.initMod = (npc.initMod || 0) + delta;
+    this._updateNpcInitMod(npcId, npc.initMod);
+  },
+
+  _setNpcInitMod(npcId, value) {
+    const npc = this.npcCards?.[npcId];
+    if (!npc) return;
+    npc.initMod = parseInt(value) || 0;
+    this._updateNpcInitMod(npcId, npc.initMod);
+  },
+
+  _updateNpcInitMod(npcId, value) {
+    const inp = document.querySelector(`#npc-card-${npcId} [data-action="initmod-input"]`);
+    if (inp) inp.value = value;
   },
 
   _removeNpc(npcId) {
